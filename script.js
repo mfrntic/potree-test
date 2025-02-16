@@ -12,8 +12,8 @@ $(function () {
     viewer.setRightView();
 
     viewer.setEDLEnabled(true);
-    viewer.setEDLRadius(1.4);
-    viewer.setEDLStrength(1.2);
+    // viewer.setEDLRadius(1.4);
+    // viewer.setEDLStrength(1.2);
     // viewer.setBackground("skybox");
 
     viewer.setDescription("Hrvatski šumarski institut: 7_1cm_laz.laz");
@@ -34,7 +34,8 @@ $(function () {
         let pointcloud = e.pointcloud;
 
         let material = pointcloud.material;
-        material.size = 0.4;
+        material.size = 0.6;
+        material.minSize = 0.4;
         material.pointSizeType = Potree.PointSizeType.FIXED;
         material.shape = Potree.PointShape.SQUARE;
 

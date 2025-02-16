@@ -1,0 +1,30 @@
+{
+  "name": "potree-viewer",
+  "version": "1.0.0",
+  "description": "Potree point cloud viewer with Express server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dat.gui": "^0.7.9",
+    "express": "^4.21.2",
+    "jquery": "^3.7.1",
+    "jquery-ui": "^1.14.1",
+    "jquery-ui-dist": "^1.13.3",
+    "jstree": "^3.3.17",
+    "potree": "^0.1.0",
+    "potree-core": "^2.0.10",
+    "proj4": "^2.15.0",
+    "stats.js": "^0.17.0",
+    "three": "^0.91.0",
+    "tween.js": "^16.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

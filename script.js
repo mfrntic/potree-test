@@ -2,7 +2,7 @@ $(function () {
 
     window.viewer = new Potree.Viewer(document.getElementById("potree_render_area"));
 
-   
+    // viewer.setBackground("black");
 
     viewer.setEDLEnabled(false);
     viewer.setFOV(80);
@@ -43,16 +43,12 @@ $(function () {
 
         viewer.fitToScreen();
 
-        // // Set specific camera position and target
+        // // // Set specific camera position and target
         // viewer.scene.view.position.set(
-        //     460678.6726166603,
-        // 	5051257.750215686,
-        // 	0.6,
+        //     460713.363, 5051277.927, 13.890
         // );
         // viewer.scene.view.lookAt(
-        // 	460678.6726166603,
-        // 	5051257.750215686,
-        // 	0.6,
+        //     460689.741, 5051266.563, 14.257
         // );
     });
 });

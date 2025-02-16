@@ -1,0 +1,107 @@
+{
+    "tb": {
+        "navigation_opt": "Navigacija",
+        "rendering_opt": "Izgled",
+        "tools_opt": "Alati",
+        "measurments_opt": "Mjerenja",
+        "clipping_opt": "Izrezivanje",
+        "annotations_opt": "Bilješke",
+        "materials_opt": "Materijali",
+        "scene_opt": "Scena",
+        "classification_filter_opt": "Filter klasifikacije",
+        "filters_opt": "Filteri",
+        "parameters_opt": "Ostale postavke",
+        "about_opt": "O programu"
+    },
+    "tt": {
+        "angle_measurement": "Mjerenje kuta",
+        "point_measurement": "Mjerenje točke",
+        "distance_measurement": "Mjerenje udaljenosti",
+        "height_measurement": "Mjerenje visine",
+        "circle_measurement": "Mjerenje kruga",
+        "area_measurement": "Mjerenje površine",
+        "volume_measurement": "Mjerenje volumena",
+        "height_profile": "Visinski profil",
+        "annotation": "Bilješka",
+        "clip_volume": "Izrezivanje volumena",
+        "clip_polygon": "Izrezivanje poligonom",
+        "screen_clip_box": "Nacrtajte okvir za odabir. Potrebno je biti u ortografskom načinu kamere!",
+        "clip_plane_x": "Ravnina rezanja po x osi",
+        "clip_plane_y": "Ravnina rezanja po y osi",
+        "clip_plane_z": "Ravnina rezanja po z osi",
+        "remove_all_measurement": "Ukloni sva mjerenja",
+        "left_view_control": "Lijevi pogled",
+        "right_view_control": "Desni pogled",
+        "front_view_control": "Prednji pogled",
+        "back_view_control": "Stražnji pogled",
+        "top_view_control": "Gornji pogled",
+        "bottom_view_control": "Donji pogled",
+        "focus_control": "Puni opseg",
+        "orbit_control": "Orbitalna kontrola",
+        "flight_control": "Kontrola leta",
+        "heli_control": "Kontrola helikoptera",
+        "earth_control": "Kontrola zemlje",
+        "perspective_camera_control": "Perspektivna kamera",
+        "orthographic_camera_control": "Ortografska kamera",
+        "navigation_cube_control": "Navigacijska kocka",
+        "remove_all_clipping_volumes": "Ukloni sve volumene izrezivanja",
+        "compass": "Kompas",
+        "camera_animation": "Animacija kamere"
+    },
+    "appearance": {
+        "nb_max_pts": "Broj točaka",
+        "point_size": "Veličina točke",
+        "min_point_size": "Minimalna veličina",
+        "point_opacity": "Prozirnost",
+        "field_view": "Vidno polje",
+        "point_size_type": "Način određivanja veličine točke",
+        "point_material": "Materijali",
+        "elevation_range": "Raspon visine",
+        "extra_range": "Skalarni raspon",
+        "point_quality": "Kvaliteta",
+        "point_shape": "Oblik",
+        "edl_radius": "Radijus",
+        "edl_strength": "Jačina",
+        "edl_opacity": "Prozirnost",
+        "edl_enable": "Omogući",
+        "min_node_size": "Minimalna veličina čvora",
+        "clip_mode": "Način izrezivanja",
+        "move_speed": "Brzina",
+        "skybox": "Nebo",
+        "bottom_lock": "Drži iznad tla",
+        "box": "Okvir",
+        "length_unit": "Mjerna jedinica",
+        "freeze": "Zaključaj pogled",
+        "language": "Jezik",
+        "backface_culling": "Uklanjanje stražnjih površina"
+    },
+    "measurements": {
+        "clip": "izreži",
+        "show": "prikaži volumen"
+    },
+    "annotations": {
+        "show3D": "prikaži u 3D",
+        "showMap": "prikaži na karti"
+    },
+    "profile": {
+        "nb_points": "Broj točaka",
+        "title": "Visinski profil",
+        "save_las": "Spremi LAS(3D)",
+        "save_ortho": "Spremi CSV(2D)"
+    },
+    "scene": {
+        "camera_position": "Pozicija kamere",
+        "camera_target": "Meta kamere"
+    },
+    "filters": {
+        "return_number": "Broj povratka",
+        "number_of_returns": "Broj povrataka",
+        "gps_min": "minimum",
+        "gps_max": "maksimum",
+        "gps_time": "GPS vrijeme"
+    },
+    "settings": {
+        "language": "Jezik"
+    }
+
+}

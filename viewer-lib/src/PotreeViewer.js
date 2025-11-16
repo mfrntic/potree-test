@@ -42,6 +42,9 @@ export class PotreeViewer extends EventEmitter {
       // Create Three.js scene
       this.scene = new THREE.Scene();
 
+      // Store viewer reference in scene for measurements to access
+      this.scene.userData.viewer = this;
+
       // Create camera
       const aspect = this.container.clientWidth / this.container.clientHeight;
       this.camera = new THREE.PerspectiveCamera(

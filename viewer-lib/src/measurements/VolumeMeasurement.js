@@ -30,7 +30,7 @@ export class VolumeMeasurement extends Measurement {
     // Use base class addPoint which handles wrapping Vector3 in object
     super.addPoint(point);
 
-    // When second point is added, calculate initial radius
+    // When second point is added, calculate initial radius and create geometry ONCE
     if (this.points.length === 2) {
       const center = this.points[0].position;
       const radiusPoint = this.points[1].position;
@@ -38,10 +38,11 @@ export class VolumeMeasurement extends Measurement {
 
       // Set uniform scale (sphere)
       this.scale.set(radius, radius, radius);
-    }
 
-    // Auto-finish when 2 points are added
-    if (this.points.length === this.maxPoints) {
+      // Create sphere wireframe ONCE
+      this._createSphereGeometry();
+
+      // Auto-finish
       this.finish();
     }
   }
@@ -55,43 +56,174 @@ export class VolumeMeasurement extends Measurement {
     // Update markers
     this._updateMarkers();
 
-    // Update lines and sphere if we have 2 points
+    // Update radius line if we have 2 points
     if (this.points.length >= 2) {
       this._updateRadiusLine();
-      this._updateSphereWireframe();
+      // Update labels every frame
+      this._updateLabels();
     }
   }
 
   /**
    * Get the measurement result (cached to prevent jitter)
-   * Uses ellipsoid volume formula: V = (4/3) * π * rx * ry * rz
-   * For a sphere (rx = ry = rz = r): V = (4/3) * π * r³
+   * Calculates volume of point cloud within the sphere using voxel grid method
    */
   getResult() {
     return this._getCachedResult(() => {
       if (this.points.length < 2) {
-        return { volume: 0, radius: 0, surfaceArea: 0 };
+        return { volume: 0, radius: 0, surfaceArea: 0, pointCount: 0 };
       }
 
       const rx = this.scale.x;
       const ry = this.scale.y;
       const rz = this.scale.z;
 
-      // Ellipsoid volume formula (see https://en.wikipedia.org/wiki/Ellipsoid#Volume)
-      const volume = (4 / 3) * Math.PI * rx * ry * rz;
-
-      // For a perfect sphere, calculate surface area
+      // Calculate average radius
       const avgRadius = (rx + ry + rz) / 3;
-      const surfaceArea = 4 * Math.PI * avgRadius * avgRadius;
+
+      // Calculate volume of points within sphere using voxel grid
+      const pointCloudVolume = this._calculatePointCloudVolume();
 
       return {
-        volume,
+        volume: pointCloudVolume.volume,
         radius: avgRadius,
         radii: { rx, ry, rz },
-        surfaceArea,
+        surfaceArea: 4 * Math.PI * avgRadius * avgRadius,
         center: this.points[0].position.clone(),
+        pointCount: pointCloudVolume.pointCount,
+        voxelSize: pointCloudVolume.voxelSize,
       };
     });
+  }
+
+  /**
+   * Calculate volume of point cloud within the sphere using voxel grid method
+   * Similar to Potree's volume calculation
+   * @private
+   */
+  _calculatePointCloudVolume() {
+    // Get viewer reference to access point cloud
+    const viewer = this._getViewer();
+    if (!viewer || !viewer.pointClouds || viewer.pointClouds.length === 0) {
+      console.warn('[VolumeMeasurement] No point cloud available for volume calculation');
+      return { volume: 0, pointCount: 0, voxelSize: 0 };
+    }
+
+    const center = this.points[0].position;
+    const rx = this.scale.x;
+    const ry = this.scale.y;
+    const rz = this.scale.z;
+
+    const pointCloud = viewer.pointClouds[0];
+
+    // Determine voxel size based on point cloud spacing
+    const spacing = pointCloud.pcoGeometry?.spacing || 0.1;
+    const voxelSize = spacing * 2; // Use 2x spacing for voxel size
+
+    console.log('[VolumeMeasurement] Calculating volume with:', {
+      center: center.toArray(),
+      radius: [rx, ry, rz],
+      voxelSize,
+      spacing
+    });
+
+    // Create voxel grid to count occupied voxels
+    const voxelGrid = new Map();
+    let pointCount = 0;
+
+    // Get all loaded nodes from point cloud
+    const nodes = pointCloud.visibleNodes || [];
+    console.log(`[VolumeMeasurement] Processing ${nodes.length} visible nodes`);
+
+    for (const node of nodes) {
+      if (!node.sceneNode || !node.sceneNode.geometry) continue;
+
+      const geometry = node.sceneNode.geometry;
+      if (!geometry.attributes || !geometry.attributes.position) continue;
+
+      const positions = geometry.attributes.position.array;
+      const numPoints = positions.length / 3;
+
+      // Get node's world transformation matrix
+      const nodeWorldMatrix = node.sceneNode.matrixWorld;
+
+      // Process each point in this node
+      for (let i = 0; i < positions.length; i += 3) {
+        // Get point position in node's local space
+        const localPos = new THREE.Vector3(
+          positions[i],
+          positions[i + 1],
+          positions[i + 2]
+        );
+
+        // Transform to world space using node's matrix
+        const worldPos = localPos.clone().applyMatrix4(nodeWorldMatrix);
+
+        // Check if point is inside the ellipsoid
+        const dx = (worldPos.x - center.x) / rx;
+        const dy = (worldPos.y - center.y) / ry;
+        const dz = (worldPos.z - center.z) / rz;
+        const distSq = dx * dx + dy * dy + dz * dz;
+
+        if (distSq <= 1.0) {
+          // Point is inside sphere
+          pointCount++;
+
+          // Calculate voxel index
+          const vx = Math.floor(worldPos.x / voxelSize);
+          const vy = Math.floor(worldPos.y / voxelSize);
+          const vz = Math.floor(worldPos.z / voxelSize);
+          const voxelKey = `${vx},${vy},${vz}`;
+
+          // Mark voxel as occupied
+          voxelGrid.set(voxelKey, true);
+        }
+      }
+    }
+
+    // Calculate volume: number of occupied voxels × voxel volume
+    const occupiedVoxels = voxelGrid.size;
+    const voxelVolume = voxelSize * voxelSize * voxelSize;
+    const totalVolume = occupiedVoxels * voxelVolume;
+
+    console.log('[VolumeMeasurement] Volume calculation result:', {
+      pointCount,
+      occupiedVoxels,
+      voxelVolume,
+      totalVolume
+    });
+
+    return {
+      volume: totalVolume,
+      pointCount,
+      voxelSize,
+    };
+  }
+
+  /**
+   * Get viewer instance from scene hierarchy
+   * @private
+   */
+  _getViewer() {
+    // Try to find viewer through scene traversal
+    let current = this.scene;
+    while (current) {
+      if (current.userData && current.userData.viewer) {
+        return current.userData.viewer;
+      }
+      if (current.parent) {
+        current = current.parent;
+      } else {
+        break;
+      }
+    }
+
+    // Fallback: search for viewer in window/global scope
+    if (typeof window !== 'undefined' && window.viewer) {
+      return window.viewer;
+    }
+
+    return null;
   }
 
   /**
@@ -177,11 +309,10 @@ export class VolumeMeasurement extends Measurement {
   }
 
   /**
-   * Update sphere/ellipsoid wireframe visualization (reuse existing or create new)
-   * Based on Potree's SphereVolume wireframe
+   * Create sphere geometry and wireframe ONCE (called when second point is added)
    * @private
    */
-  _updateSphereWireframe() {
+  _createSphereGeometry() {
     if (!this.scene) return;
     if (this.points.length < 2) return;
 
@@ -190,119 +321,99 @@ export class VolumeMeasurement extends Measurement {
     const ry = this.scale.y;
     const rz = this.scale.z;
 
-    // Calculate wireframe positions
-    const framePositions = [];
-    const segments = 32;
-    const latitudes = 8;
-    const longitudes = 5;
+    // Create wireframe using THREE.SphereGeometry ONCE
+    const wireframeGeometry = new THREE.SphereGeometry(1, 16, 16);
+    const wireframeEdges = new THREE.EdgesGeometry(wireframeGeometry);
 
-    // Create horizontal rings (latitude lines) at different Y heights
-    for (let i = 0; i < latitudes; i++) {
-      const lat = ((i / latitudes) - 0.5) * Math.PI;
-      const yPos = ry * Math.sin(lat);
-      const radiusAtLat = Math.cos(lat);
+    const frameMaterial = new THREE.LineBasicMaterial({
+      color: 0x00ffff,
+      transparent: true,
+      opacity: 0.5,
+    });
 
-      for (let j = 0; j <= segments; j++) {
-        const lon = (j / segments) * Math.PI * 2;
-        const x = center.x + rx * radiusAtLat * Math.cos(lon);
-        const y = center.y + yPos;
-        const z = center.z + rz * radiusAtLat * Math.sin(lon);
-        framePositions.push(x, y, z);
-      }
-    }
+    const frame = new THREE.LineSegments(wireframeEdges, frameMaterial);
+    frame.position.copy(center);
+    frame.scale.set(rx, ry, rz);
+    frame.renderOrder = 1;
+    frame.userData.isWireframe = true;
+    this.scene.add(frame);
+    this.labels.push(frame);
 
-    // Create vertical segments (longitude lines)
-    for (let i = 0; i < longitudes; i++) {
-      const lon = (i / longitudes) * Math.PI * 2;
+    // Create transparent sphere mesh ONCE
+    const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+    const sphereMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      transparent: true,
+      opacity: 0.1,
+      side: THREE.DoubleSide,
+    });
 
-      for (let j = 0; j <= segments; j++) {
-        const lat = ((j / segments) - 0.5) * Math.PI;
-        const x = center.x + rx * Math.cos(lat) * Math.cos(lon);
-        const y = center.y + ry * Math.sin(lat);
-        const z = center.z + rz * Math.cos(lat) * Math.sin(lon);
-        framePositions.push(x, y, z);
-      }
-    }
-
-    // Find or create wireframe
-    let frame = this.labels.find(l => l.userData && l.userData.isWireframe);
-
-    if (!frame) {
-      const frameGeometry = new THREE.BufferGeometry();
-      const frameMaterial = new THREE.LineBasicMaterial({
-        color: 0x00ffff,
-        transparent: true,
-        opacity: 0.5,
-      });
-      frame = new THREE.LineSegments(frameGeometry, frameMaterial);
-      frame.renderOrder = 1;
-      frame.userData.isWireframe = true;
-      this.scene.add(frame);
-      this.labels.push(frame);
-    }
-
-    // Update wireframe positions
-    frame.geometry.setAttribute('position',
-      new THREE.Float32BufferAttribute(framePositions, 3)
-    );
-    frame.geometry.attributes.position.needsUpdate = true;
-
-    // Find or create sphere mesh
-    let sphere = this.labels.find(l => l.userData && l.userData.isSphereMesh);
-
-    if (!sphere) {
-      const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-      const sphereMaterial = new THREE.MeshBasicMaterial({
-        color: 0x00ffff,
-        transparent: true,
-        opacity: 0.1,
-        side: THREE.DoubleSide,
-      });
-      sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-      sphere.renderOrder = 2;
-      sphere.userData.isSphereMesh = true;
-      this.scene.add(sphere);
-      this.labels.push(sphere);
-    }
-
-    // Update sphere position and scale
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
     sphere.position.copy(center);
     sphere.scale.set(rx, ry, rz);
+    sphere.renderOrder = 2;
+    sphere.userData.isSphereMesh = true;
+    this.scene.add(sphere);
+    this.labels.push(sphere);
 
-    // Update labels
+    // Create labels ONCE
     const result = this.getResult();
 
-    // Find or create volume label
-    let volumeLabel = this.labels.find(l => l.material && l.material.map && l.userData && l.userData.isVolumeLabel);
-
-    if (!volumeLabel) {
-      volumeLabel = new TextSprite(`V: ${result.volume.toFixed(2)} m³`);
-      volumeLabel.renderOrder = 3;
-      volumeLabel.backgroundColor = 'rgba(0, 255, 255, 0.8)';
-      volumeLabel.scale.multiplyScalar(0.3);
-      volumeLabel.userData.isVolumeLabel = true;
-      this.scene.add(volumeLabel);
-      this.labels.push(volumeLabel);
-    }
-
-    volumeLabel.text = `V: ${result.volume.toFixed(2)} m³`;
+    // Create volume label
+    const volumeText = result.pointCount > 0
+      ? `V: ${result.volume.toFixed(2)} m³ (${result.pointCount} pts)`
+      : `V: ${result.volume.toFixed(2)} m³`;
+    const volumeLabel = new TextSprite(volumeText);
     volumeLabel.position.set(center.x, center.y + ry + 0.5, center.z);
+    volumeLabel.renderOrder = 3;
+    volumeLabel.backgroundColor = 'rgba(0, 255, 255, 0.8)';
+    volumeLabel.scale.multiplyScalar(0.3);
+    volumeLabel.userData.isVolumeLabel = true;
+    this.scene.add(volumeLabel);
+    this.labels.push(volumeLabel);
 
-    // Find or create radius label
-    let radiusLabel = this.labels.find(l => l.material && l.material.map && l.userData && l.userData.isRadiusLabel);
+    // Create radius label
     const radiusPos = new THREE.Vector3().addVectors(center, this.points[1].position).multiplyScalar(0.5);
+    const actualRadius = center.distanceTo(this.points[1].position);
+    const radiusLabel = new TextSprite(`r: ${actualRadius.toFixed(2)} m`);
+    radiusLabel.position.copy(radiusPos);
+    radiusLabel.renderOrder = 3;
+    radiusLabel.backgroundColor = 'rgba(0, 255, 255, 0.7)';
+    radiusLabel.scale.multiplyScalar(0.3);
+    radiusLabel.userData.isRadiusLabel = true;
+    this.scene.add(radiusLabel);
+    this.labels.push(radiusLabel);
+  }
 
-    if (!radiusLabel) {
-      radiusLabel = new TextSprite(`r: ${result.radius.toFixed(2)} m`);
-      radiusLabel.renderOrder = 3;
-      radiusLabel.backgroundColor = 'rgba(0, 255, 255, 0.7)';
-      radiusLabel.scale.multiplyScalar(0.3);
-      radiusLabel.userData.isRadiusLabel = true;
-      this.scene.add(radiusLabel);
-      this.labels.push(radiusLabel);
+  /**
+   * Update labels (called every frame to update text)
+   * @private
+   */
+  _updateLabels() {
+    if (!this.scene) return;
+    if (this.points.length < 2) return;
+
+    const center = this.points[0].position;
+    const ry = this.scale.y;
+    const result = this.getResult();
+
+    // Find and update volume label
+    const volumeLabel = this.labels.find(l => l.material && l.material.map && l.userData && l.userData.isVolumeLabel);
+    if (volumeLabel) {
+      const volumeText = result.pointCount > 0
+        ? `V: ${result.volume.toFixed(2)} m³ (${result.pointCount} pts)`
+        : `V: ${result.volume.toFixed(2)} m³`;
+      volumeLabel.text = volumeText;
+      volumeLabel.position.set(center.x, center.y + ry + 0.5, center.z);
     }
 
-    radiusLabel.text = `r: ${result.radius.toFixed(2)} m`;
-    radiusLabel.position.copy(radiusPos);
+    // Find and update radius label
+    const radiusLabel = this.labels.find(l => l.material && l.material.map && l.userData && l.userData.isRadiusLabel);
+    if (radiusLabel) {
+      const radiusPos = new THREE.Vector3().addVectors(center, this.points[1].position).multiplyScalar(0.5);
+      const actualRadius = center.distanceTo(this.points[1].position);
+      radiusLabel.text = `r: ${actualRadius.toFixed(2)} m`;
+      radiusLabel.position.copy(radiusPos);
+    }
   }
 }

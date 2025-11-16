@@ -21,68 +21,13 @@
       height: 100vh;
       position: relative;
     }
-
-    #info {
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      background: rgba(255, 255, 255, 0.95);
-      padding: 16px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      max-width: 400px;
-      font-size: 13px;
-      z-index: 999;
-    }
-
-    #info h3 {
-      margin: 0 0 8px 0;
-      font-size: 16px;
-      color: #333;
-    }
-
-    #info p {
-      margin: 4px 0;
-      color: #666;
-      line-height: 1.5;
-    }
-
-    #info code {
-      background: #f5f5f5;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-family: 'Courier New', monospace;
-      font-size: 12px;
-    }
-
-    .status {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid #e0e0e0;
-      font-weight: 500;
-      color: #007bff;
-    }
   </style>
 </head>
 <body>
   <div id="container"></div>
 
-  <div id="info">
-    <h3>PotreeViewer Demo</h3>
-    <p><strong>Controls:</strong></p>
-    <p>• Use toolbar buttons to navigate and measure</p>
-    <p>• <strong>Measurements:</strong> Distance, Height, Angle, Radius, Volume</p>
-    <p>• <strong>Views:</strong> Top, Bottom, Left, Right, Front, Back</p>
-    <p>• Press <code>ESC</code> to cancel measurement</p>
-    <p>• Press <code>Enter</code> to finish distance measurement</p>
-    <p class="status" id="status">Initializing...</p>
-  </div>
-
   <script type="module">
-    import { PotreeViewer, Toolbar } from './src/index.js';
-
-    // Get status element
-    const statusEl = document.getElementById('status');
+    import { PotreeViewer, Toolbar, PotreeViewerConsole } from './src/index.js';
 
     // Create viewer
     const viewer = new PotreeViewer({
@@ -106,118 +51,47 @@
       // Callbacks
       onReady: (viewerInstance) => {
         console.log('Viewer ready!', viewerInstance);
-        statusEl.textContent = 'Viewer ready!';
-        statusEl.style.color = '#28a745';
       },
 
       onPointCloudLoaded: (pointCloud) => {
         console.log('Point cloud loaded:', pointCloud);
-        statusEl.textContent = 'Point cloud loaded!';
       },
 
       onError: (error) => {
         console.error('Viewer error:', error);
-        statusEl.textContent = `Error: ${error.message}`;
-        statusEl.style.color = '#dc3545';
       }
     });
 
-    // Create toolbar with custom configuration
+    // Create toolbar with default SVG icons
     const toolbar = new Toolbar(viewer, {
-      alignment: 'top-right',
-      buttons: [
-        // General controls
-        { id: 'fit', group: 'general', label: 'Fit to Screen', icon: '⊡', action: () => viewer.fitToScreen() },
-        { id: 'clear', group: 'general', label: 'Clear All', icon: '🗑', action: () => viewer.clearMeasurements() },
-
-        // Measurements
-        { id: 'distance', group: 'measurement', label: 'Distance', icon: '📏', action: () => viewer.setMeasurementMode('distance') },
-        { id: 'height', group: 'measurement', label: 'Height', icon: '↕', action: () => viewer.setMeasurementMode('height') },
-        { id: 'angle', group: 'measurement', label: 'Angle', icon: '∠', action: () => viewer.setMeasurementMode('angle') },
-        { id: 'radius', group: 'measurement', label: 'Radius', icon: '⊙', action: () => viewer.setMeasurementMode('radius') },
-        { id: 'volume', group: 'measurement', label: 'Volume', icon: '⊚', action: () => viewer.setMeasurementMode('volume') },
-
-        // Views
-        { id: 'view-left', group: 'view', label: 'Left View', icon: '←', action: () => viewer.setNamedView('left') },
-        { id: 'view-right', group: 'view', label: 'Right View', icon: '→', action: () => viewer.setNamedView('right') },
-        { id: 'view-front', group: 'view', label: 'Front View', icon: '↓', action: () => viewer.setNamedView('front') },
-        { id: 'view-back', group: 'view', label: 'Back View', icon: '↑', action: () => viewer.setNamedView('back') },
-        { id: 'view-top', group: 'view', label: 'Top View', icon: '⊤', action: () => viewer.setNamedView('top') },
-        { id: 'view-bottom', group: 'view', label: 'Bottom View', icon: '⊥', action: () => viewer.setNamedView('bottom') },
-      ]
+      alignment: 'top-right'
     });
 
-    // Listen to measurement events
-    viewer.on('measurement-started', (measurement) => {
-      console.log('Measurement started:', measurement);
-      statusEl.textContent = `Measuring ${measurement.type}... (click points, ESC to cancel)`;
-      statusEl.style.color = '#007bff';
+    // Create PotreeViewerConsole (mini console)
+    const console = new PotreeViewerConsole(viewer, {
+      position: 'bottom-left',
+      width: '360px',
+      collapsed: false,
+      showTimestamp: true,
+      visible: true  // Set to false to hide initially
     });
 
-    viewer.on('measurement-mode-changed', (mode) => {
-      if (mode === 'none') {
-        statusEl.textContent = 'Ready - Select a tool';
-        statusEl.style.color = '#28a745';
-      } else {
-        statusEl.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} mode active - Click to measure`;
-        statusEl.style.color = '#007bff';
+    // Example: Toggle console visibility with keyboard shortcut (Ctrl+`)
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === '`') {
+        console.toggleVisibility();
       }
-    });
-
-    viewer.on('measurement-updated', (measurement) => {
-      console.log('Measurement updated:', measurement);
-    });
-
-    viewer.on('measurement-finished', (measurement) => {
-      console.log('Measurement finished:', measurement);
-
-      // Update status with measurement result
-      let resultText = '';
-
-      switch (measurement.type) {
-        case 'distance':
-          resultText = `Distance: ${measurement.result.distanceTotal.toFixed(2)} m`;
-          break;
-        case 'height':
-          resultText = `Height: ${measurement.result.height.toFixed(2)} m (3D: ${measurement.result.distance3D.toFixed(2)} m)`;
-          break;
-        case 'angle':
-          resultText = `Angle: ${measurement.result.angleDegrees.toFixed(1)}°`;
-          break;
-        case 'radius':
-          resultText = `Radius: ${measurement.result.radius.toFixed(2)} m | Circumference: ${measurement.result.circumference.toFixed(2)} m`;
-          break;
-        case 'volume':
-          resultText = `Volume: ${measurement.result.volume.toFixed(2)} m³ | Radius: ${measurement.result.radius.toFixed(2)} m`;
-          break;
-      }
-
-      if (resultText) {
-        statusEl.textContent = `✓ ${resultText}`;
-        statusEl.style.color = '#28a745';
-      }
-    });
-
-    viewer.on('view-changed', (info) => {
-      console.log('View changed:', info);
-    });
-
-    viewer.on('measurement-cleared', () => {
-      statusEl.textContent = 'All measurements cleared';
-      statusEl.style.color = '#6c757d';
-      setTimeout(() => {
-        statusEl.textContent = 'Ready - Select a tool';
-        statusEl.style.color = '#28a745';
-      }, 2000);
     });
 
     // Expose to window for debugging
     window.viewer = viewer;
     window.toolbar = toolbar;
+    window.viewerConsole = console;
 
     // Clean up on page unload
     window.addEventListener('beforeunload', () => {
       toolbar.dispose();
+      console.dispose();
       viewer.dispose();
     });
   </script>

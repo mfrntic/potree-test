@@ -8,26 +8,41 @@ export class Toolbar {
     this.container = null;
     this.currentMeasurement = null;
 
+    // SVG Icons from Lucide (https://lucide.dev) - MIT License
+    const ICONS = {
+      maximize: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>',
+      trash: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+      ruler: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg>',
+      moveVertical: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m8 18 4 4 4-4"/><path d="m8 6 4-4 4 4"/></svg>',
+      triangle: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/></svg>',
+      circleDot: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>',
+      box: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+      arrowLeft: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>',
+      arrowRight: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
+      arrowDown: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>',
+      arrowUp: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>',
+      chevronUp: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>',
+      chevronDown: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+    };
+
     // Default button groups
     const defaultButtons = [
-      // General controls
-      { id: 'fit', group: 'general', label: 'Fit to Screen', icon: '⊡', action: () => this.viewer.fitToScreen() },
-      { id: 'clear', group: 'general', label: 'Clear Measurements', icon: '🗑', action: () => this._clearMeasurements() },
-
       // Measurements
-      { id: 'distance', group: 'measurement', label: 'Distance', icon: '📏', action: () => this._setMeasurementMode('distance') },
-      { id: 'height', group: 'measurement', label: 'Height', icon: '↕', action: () => this._setMeasurementMode('height') },
-      { id: 'angle', group: 'measurement', label: 'Angle', icon: '∠', action: () => this._setMeasurementMode('angle') },
-      { id: 'radius', group: 'measurement', label: 'Radius', icon: '⊙', action: () => this._setMeasurementMode('radius') },
-      { id: 'volume', group: 'measurement', label: 'Volume', icon: '⊚', action: () => this._setMeasurementMode('volume') },
+      { id: 'distance', group: 'measurement', label: 'Distance', icon: ICONS.ruler, action: () => this._setMeasurementMode('distance') },
+      { id: 'height', group: 'measurement', label: 'Height', icon: ICONS.moveVertical, action: () => this._setMeasurementMode('height') },
+      { id: 'angle', group: 'measurement', label: 'Angle', icon: ICONS.triangle, action: () => this._setMeasurementMode('angle') },
+      { id: 'radius', group: 'measurement', label: 'Radius', icon: ICONS.circleDot, action: () => this._setMeasurementMode('radius') },
+      { id: 'volume', group: 'measurement', label: 'Volume', icon: ICONS.box, action: () => this._setMeasurementMode('volume') },
+      { id: 'clear', group: 'measurement', label: 'Clear Measurements', icon: ICONS.trash, action: () => this._clearMeasurements() },
 
       // Views
-      { id: 'view-left', group: 'view', label: 'Left View', icon: '←', action: () => this.viewer.setNamedView('left') },
-      { id: 'view-right', group: 'view', label: 'Right View', icon: '→', action: () => this.viewer.setNamedView('right') },
-      { id: 'view-front', group: 'view', label: 'Front View', icon: '↓', action: () => this.viewer.setNamedView('front') },
-      { id: 'view-back', group: 'view', label: 'Back View', icon: '↑', action: () => this.viewer.setNamedView('back') },
-      { id: 'view-top', group: 'view', label: 'Top View', icon: '⊤', action: () => this.viewer.setNamedView('top') },
-      { id: 'view-bottom', group: 'view', label: 'Bottom View', icon: '⊥', action: () => this.viewer.setNamedView('bottom') },
+      { id: 'fit', group: 'view', label: 'Fit to Screen', icon: ICONS.maximize, action: () => this.viewer.fitToScreen() },
+      { id: 'view-left', group: 'view', label: 'Left View', icon: ICONS.arrowLeft, action: () => this.viewer.setNamedView('left') },
+      { id: 'view-right', group: 'view', label: 'Right View', icon: ICONS.arrowRight, action: () => this.viewer.setNamedView('right') },
+      { id: 'view-front', group: 'view', label: 'Front View', icon: ICONS.arrowDown, action: () => this.viewer.setNamedView('front') },
+      { id: 'view-back', group: 'view', label: 'Back View', icon: ICONS.arrowUp, action: () => this.viewer.setNamedView('back') },
+      { id: 'view-top', group: 'view', label: 'Top View', icon: ICONS.chevronUp, action: () => this.viewer.setNamedView('top') },
+      { id: 'view-bottom', group: 'view', label: 'Bottom View', icon: ICONS.chevronDown, action: () => this.viewer.setNamedView('bottom') },
     ];
 
     this.options = {
@@ -165,10 +180,10 @@ export class Toolbar {
     button.className = 'potree-toolbar-button';
     button.title = config.label; // Tooltip
 
-    // Add icon and label
+    // Add icon (SVG or text)
     const iconSpan = document.createElement('span');
     iconSpan.className = 'potree-button-icon';
-    iconSpan.textContent = config.icon;
+    iconSpan.innerHTML = config.icon; // Use innerHTML to support SVG
     button.appendChild(iconSpan);
 
     // Add data attribute for measurement modes
@@ -230,25 +245,25 @@ export class Toolbar {
       }
 
       .potree-toolbar-group {
-        background: rgba(255, 255, 255, 0.95);
+        background: rgba(40, 44, 52, 0.75);
+        backdrop-filter: blur(8px);
         border-radius: 8px;
-        padding: 4px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+        padding: 3px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         pointer-events: auto;
+        border: 1px solid rgba(255, 255, 255, 0.08);
       }
 
       .potree-toolbar-button {
-        width: 40px;
-        height: 40px;
+        width: 36px;
+        height: 36px;
         padding: 0;
         border: none;
         background: transparent;
-        color: #333;
-        font-size: 20px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: rgba(255, 255, 255, 0.85);
         cursor: pointer;
         border-radius: 6px;
-        transition: all 0.2s;
+        transition: all 0.2s ease;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -256,26 +271,37 @@ export class Toolbar {
       }
 
       .potree-toolbar-button:hover {
-        background: rgba(0, 0, 0, 0.08);
+        background: rgba(255, 255, 255, 0.12);
       }
 
       .potree-toolbar-button:active {
-        background: rgba(0, 0, 0, 0.15);
+        background: rgba(255, 255, 255, 0.2);
         transform: scale(0.95);
       }
 
       .potree-toolbar-button.active {
-        background: #007bff;
+        background: #3498db;
         color: white;
+        box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.25);
       }
 
       .potree-toolbar-button.active:hover {
-        background: #0056b3;
+        background: #2980b9;
       }
 
       .potree-button-icon {
-        display: block;
-        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+      }
+
+      .potree-button-icon svg {
+        width: 20px;
+        height: 20px;
+        stroke: currentColor;
+        stroke-width: 1.8;
       }
     `;
     document.head.appendChild(style);

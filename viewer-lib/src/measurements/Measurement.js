@@ -7,21 +7,28 @@ export class Measurement {
   constructor(type, id) {
     this.id = id || `measurement-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     this.type = type;
-    this.points = [];
+    this.points = []; // Array of point objects: {position: Vector3, ...otherData}
     this.markers = [];
     this.lines = null;
     this.labels = [];
     this.finished = false;
     this._cachedResult = null; // Cache result to prevent jitter from recalculation
     this._pointsHash = null; // Hash of points to detect changes
+    this.scene = null; // Reference to the scene (set when first visual is created)
   }
 
   /**
    * Add a point to the measurement
-   * @param {THREE.Vector3} point - 3D point
+   * @param {Object} point - Point object {position: Vector3, ...otherData}
+   * Based on Potree's approach: stores object with position property
    */
   addPoint(point) {
-    this.points.push(point.clone());
+    // Store point object (like Potree does)
+    // If given a Vector3, wrap it in an object
+    if (point.x !== undefined) {
+      point = {position: point};
+    }
+    this.points.push(point);
     this._invalidateCache(); // Clear cache when points change
     this.update();
   }
@@ -67,9 +74,9 @@ export class Measurement {
    * @private
    */
   _hashPoints() {
-    // Simple hash: concatenate rounded coordinates
+    // Simple hash: concatenate rounded coordinates from position
     return this.points.map(p =>
-      `${p.x.toFixed(6)},${p.y.toFixed(6)},${p.z.toFixed(6)}`
+      `${p.position.x.toFixed(6)},${p.position.y.toFixed(6)},${p.position.z.toFixed(6)}`
     ).join('|');
   }
 
@@ -87,6 +94,25 @@ export class Measurement {
    */
   finish() {
     this.finished = true;
+  }
+
+  /**
+   * Update line positions to follow point positions
+   * This ensures lines always connect the marker points correctly
+   * Call this in the render loop to keep lines synced with points
+   */
+  updateLinePositions() {
+    // Lines should follow the points array positions
+    if (this.lines && this.lines.geometry && this.points.length >= 2) {
+      const posAttr = this.lines.geometry.getAttribute('position');
+      if (posAttr && posAttr.count === this.points.length) {
+        // Update line positions to match current point positions
+        for (let i = 0; i < this.points.length; i++) {
+          posAttr.setXYZ(i, this.points[i].x, this.points[i].y, this.points[i].z);
+        }
+        posAttr.needsUpdate = true;
+      }
+    }
   }
 
   /**
@@ -165,7 +191,7 @@ export class Measurement {
     return {
       id: this.id,
       type: this.type,
-      points: this.points.map(p => ({ x: p.x, y: p.y, z: p.z })),
+      points: this.points.map(p => ({ x: p.position.x, y: p.position.y, z: p.position.z })),
       result: this.getResult(),
     };
   }

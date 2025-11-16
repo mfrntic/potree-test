@@ -73,60 +73,86 @@ export class RadiusMeasurement extends Measurement {
    * @param {THREE.Scene} scene - Three.js scene
    */
   createVisuals(scene) {
-    // Clear existing visuals
-    this.clear(scene);
-
     if (this.points.length === 0) return;
 
-    // Create sphere markers for each point
-    const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+    // Update or create markers
+    this._updateMarkers(scene);
 
-    // Center point (different color and larger)
-    if (this.points.length >= 1) {
-      const centerMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-      const centerMarker = new THREE.Mesh(markerGeometry, centerMaterial);
-      centerMarker.position.copy(this.points[0]);
-      centerMarker.scale.set(1.3, 1.3, 1.3);
-      scene.add(centerMarker);
-      this.markers.push(centerMarker);
-    }
-
-    // Edge point
+    // Update or create lines and circle
     if (this.points.length >= 2) {
-      const edgeMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-      const edgeMarker = new THREE.Mesh(markerGeometry, edgeMaterial);
-      edgeMarker.position.copy(this.points[1]);
-      scene.add(edgeMarker);
-      this.markers.push(edgeMarker);
-
-      // Draw radius line using Line2
-      const lineGeometry = new LineGeometry();
-      lineGeometry.setPositions([
-        this.points[0].x, this.points[0].y, this.points[0].z,
-        this.points[1].x, this.points[1].y, this.points[1].z
-      ]);
-
-      const lineMaterial = new LineMaterial({
-        color: 0xff00ff,
-        linewidth: 3,
-        transparent: true,
-        opacity: 0.9,
-      });
-      lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
-
-      this.lines = new Line2(lineGeometry, lineMaterial);
-      scene.add(this.lines);
-
-      // Draw circle
-      this._createCircle(scene);
+      this._updateRadiusLine(scene);
+      this._updateCircle(scene);
     }
   }
 
   /**
-   * Create circle visualization
+   * Update marker spheres (reuse existing or create new)
    * @private
    */
-  _createCircle(scene) {
+  _updateMarkers(scene) {
+    const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+
+    // Center point (larger)
+    if (this.points.length >= 1) {
+      if (this.markers.length < 1) {
+        const centerMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+        centerMarker.renderOrder = 2;
+        centerMarker.scale.set(1.3, 1.3, 1.3);
+        scene.add(centerMarker);
+        this.markers.push(centerMarker);
+      }
+      this.markers[0].position.copy(this.points[0]);
+    }
+
+    // Edge point
+    if (this.points.length >= 2) {
+      if (this.markers.length < 2) {
+        const edgeMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+        edgeMarker.renderOrder = 2;
+        scene.add(edgeMarker);
+        this.markers.push(edgeMarker);
+      }
+      this.markers[1].position.copy(this.points[1]);
+    }
+  }
+
+  /**
+   * Update radius line (reuse existing or create new)
+   * @private
+   */
+  _updateRadiusLine(scene) {
+    if (!this.lines) {
+      const lineGeometry = new LineGeometry();
+      const lineMaterial = new LineMaterial({
+        color: 0xff00ff,
+        linewidth: 3,
+        resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+        transparent: true,
+        opacity: 0.9,
+        depthTest: true,
+        depthWrite: true,
+      });
+      this.lines = new Line2(lineGeometry, lineMaterial);
+      this.lines.renderOrder = 1;
+      scene.add(this.lines);
+    }
+
+    // Update radius line positions
+    const positions = [
+      this.points[0].x, this.points[0].y, this.points[0].z,
+      this.points[1].x, this.points[1].y, this.points[1].z
+    ];
+    this.lines.geometry.setPositions(positions);
+    this.lines.computeLineDistances();
+    this.lines.geometry.computeBoundingSphere();
+  }
+
+  /**
+   * Update circle visualization (reuse existing or create new)
+   * @private
+   */
+  _updateCircle(scene) {
     if (this.points.length < 2) return;
 
     const center = this.points[0];
@@ -163,50 +189,77 @@ export class RadiusMeasurement extends Measurement {
       }
     }
 
-    // Create circle geometry using Line2
+    // Create circle positions array
     const circlePositions = [];
     for (const point of circlePoints) {
       circlePositions.push(point.x, point.y, point.z);
     }
 
-    const circleGeometry = new LineGeometry();
-    circleGeometry.setPositions(circlePositions);
+    // Find or create circle line
+    let circle = this.labels.find(l => l.isLine && l.userData && l.userData.isCircle);
 
-    const circleMaterial = new LineMaterial({
-      color: 0xff00ff,
-      linewidth: 2,
-      transparent: true,
-      opacity: 0.7,
-    });
-    circleMaterial.resolution.set(window.innerWidth, window.innerHeight);
+    if (!circle) {
+      const circleGeometry = new THREE.BufferGeometry();
+      const circleMaterial = new THREE.LineBasicMaterial({
+        color: 0xff00ff,
+        transparent: true,
+        opacity: 0.7,
+      });
+      circle = new THREE.Line(circleGeometry, circleMaterial);
+      circle.renderOrder = 1;
+      circle.userData.isCircle = true;
+      scene.add(circle);
+      this.labels.push(circle);
 
-    const circle = new Line2(circleGeometry, circleMaterial);
-    scene.add(circle);
-    this.labels.push(circle);
+      // Initialize with empty positions
+      circle.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+    }
 
-    // Add radius label at midpoint of radius line
+    // Check if we need to update circle positions (circle has segments+1 points = 65)
+    const circleAttr = circle.geometry.getAttribute('position');
+    const circleNeedsUpdate = !circleAttr || circleAttr.count !== circlePoints.length;
+
+    if (circleNeedsUpdate) {
+      // Update circle positions
+      const circlePositionsArray = new Float32Array(circlePositions);
+      circle.geometry.setAttribute('position', new THREE.BufferAttribute(circlePositionsArray, 3));
+      circle.geometry.computeBoundingSphere();
+    }
+
+    // Update labels
     const result = this.getResult();
     const midpoint = new THREE.Vector3().addVectors(center, edge).multiplyScalar(0.5);
 
-    const label = new TextSprite(`r: ${result.radius.toFixed(2)} m`);
-    label.position.copy(midpoint);
-    label.backgroundColor = 'rgba(255, 0, 255, 0.8)';
+    // Find or create radius label
+    let radiusLabel = this.labels.find(l => l.material && l.material.map && l.userData && l.userData.isRadiusLabel);
 
-    // Fixed scale for consistent size
-    label.scale.multiplyScalar(0.5);
+    if (!radiusLabel) {
+      radiusLabel = new TextSprite(`r: ${result.radius.toFixed(2)} m`);
+      radiusLabel.renderOrder = 3;
+      radiusLabel.backgroundColor = 'rgba(255, 0, 255, 0.8)';
+      radiusLabel.scale.multiplyScalar(0.5);
+      radiusLabel.userData.isRadiusLabel = true;
+      scene.add(radiusLabel);
+      this.labels.push(radiusLabel);
+    }
 
-    scene.add(label);
-    this.labels.push(label);
+    radiusLabel.text = `r: ${result.radius.toFixed(2)} m`;
+    radiusLabel.position.copy(midpoint);
 
-    // Add circumference label at top of circle
-    const circumLabel = new TextSprite(`C: ${result.circumference.toFixed(2)} m`);
+    // Find or create circumference label
+    let circumLabel = this.labels.find(l => l.material && l.material.map && l.userData && l.userData.isCircumLabel);
+
+    if (!circumLabel) {
+      circumLabel = new TextSprite(`C: ${result.circumference.toFixed(2)} m`);
+      circumLabel.renderOrder = 3;
+      circumLabel.backgroundColor = 'rgba(255, 0, 255, 0.7)';
+      circumLabel.scale.multiplyScalar(0.5);
+      circumLabel.userData.isCircumLabel = true;
+      scene.add(circumLabel);
+      this.labels.push(circumLabel);
+    }
+
+    circumLabel.text = `C: ${result.circumference.toFixed(2)} m`;
     circumLabel.position.set(center.x, center.y + radius + 0.5, center.z);
-    circumLabel.backgroundColor = 'rgba(255, 0, 255, 0.7)';
-
-    // Fixed scale for consistent size
-    circumLabel.scale.multiplyScalar(0.5);
-
-    scene.add(circumLabel);
-    this.labels.push(circumLabel);
   }
 }

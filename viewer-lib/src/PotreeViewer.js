@@ -92,6 +92,11 @@ export class PotreeViewer extends EventEmitter {
       // Set background
       this._setBackgroundInternal(this.config.background);
 
+      // Create a completely separate scene for measurements (overlay approach)
+      // This ensures measurements are never affected by Potree transformations
+      this.measurementScene = new THREE.Scene();
+      this.measurementScene.name = 'MeasurementScene';
+
       // Create Potree instance
       this.potree = new Potree();
       this.potree.pointBudget = this.config.pointBudget;
@@ -154,12 +159,24 @@ export class PotreeViewer extends EventEmitter {
       this.potree.updatePointClouds(this.pointClouds, this.camera, this.renderer);
     }
 
-    // Update measurement marker scales based on camera distance
-    if (this.measurementManager && this.camera) {
-      this._updateMeasurementScales();
+    // CRITICAL: Update measurements every frame (like Potree does)
+    // This keeps lines and labels synchronized with point positions
+    if (this.measurementManager) {
+      const measurements = this.measurementManager.measurements;
+      for (const measurement of measurements) {
+        measurement.update();
+      }
     }
 
-    // Render scene
+    // CRITICAL: Update Line2 material resolutions before rendering
+    // This is required for Line2 shader to correctly calculate line width in screen space
+    if (this.scene) {
+      const width = this.container.clientWidth;
+      const height = this.container.clientHeight;
+      this._updateMeasurementResolutions(width, height);
+    }
+
+    // Render scene (point cloud + measurements)
     if (this.renderer && this.scene && this.camera) {
       this.renderer.render(this.scene, this.camera);
     }
@@ -191,27 +208,13 @@ export class PotreeViewer extends EventEmitter {
    * @private
    */
   _updateMeasurementResolutions(width, height) {
-    // Traverse scene to find all Line2 materials
-    this.scene.traverse((object) => {
-      if (object.material && object.material.resolution) {
-        object.material.resolution.set(width, height);
-      }
-    });
-  }
-
-  /**
-   * Update measurement marker scales based on camera distance
-   * @private
-   */
-  _updateMeasurementScales() {
-    const measurements = this.measurementManager.measurements;
-    for (const measurement of measurements) {
-      measurement.updateMarkerScales(this.camera);
-    }
-
-    // Also update current measurement if it exists
-    if (this.measurementManager.currentMeasurement) {
-      this.measurementManager.currentMeasurement.updateMarkerScales(this.camera);
+    // Traverse scene to find all Line2 materials (used by measurements)
+    if (this.scene) {
+      this.scene.traverse((object) => {
+        if (object.material && object.material.resolution) {
+          object.material.resolution.set(width, height);
+        }
+      });
     }
   }
 

@@ -75,80 +75,121 @@ export class AngleMeasurement extends Measurement {
    * @param {THREE.Scene} scene - Three.js scene
    */
   createVisuals(scene) {
-    // Clear existing visuals
-    this.clear(scene);
-
     if (this.points.length === 0) return;
 
-    // Create sphere markers for each point
-    const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
-    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+    // Update or create markers
+    this._updateMarkers(scene);
 
-    for (let i = 0; i < this.points.length; i++) {
-      const point = this.points[i];
-      const marker = new THREE.Mesh(markerGeometry, markerMaterial);
-      marker.position.copy(point);
-      scene.add(marker);
-      this.markers.push(marker);
-
-      // Make the vertex (middle point) slightly larger
-      if (i === 1 && this.points.length >= 2) {
-        marker.scale.set(1.5, 1.5, 1.5);
-      }
-    }
-
-    // Draw lines connecting the points using Line2
+    // Update or create lines
     if (this.points.length >= 2) {
-      // Line from p1 to vertex (p2)
-      const line1Geometry = new LineGeometry();
-      line1Geometry.setPositions([
-        this.points[0].x, this.points[0].y, this.points[0].z,
-        this.points[1].x, this.points[1].y, this.points[1].z
-      ]);
-
-      const lineMaterial = new LineMaterial({
-        color: 0xffaa00,
-        linewidth: 3,
-        transparent: true,
-        opacity: 0.9,
-      });
-      lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
-
-      const line1 = new Line2(line1Geometry, lineMaterial);
-      scene.add(line1);
-      this.lines = line1;
+      this._updateLines(scene);
 
       if (this.points.length === 3) {
-        // Line from vertex (p2) to p3
-        const line2Geometry = new LineGeometry();
-        line2Geometry.setPositions([
-          this.points[1].x, this.points[1].y, this.points[1].z,
-          this.points[2].x, this.points[2].y, this.points[2].z
-        ]);
-
-        const line2Material = new LineMaterial({
-          color: 0xffaa00,
-          linewidth: 3,
-          transparent: true,
-          opacity: 0.9,
-        });
-        line2Material.resolution.set(window.innerWidth, window.innerHeight);
-
-        const line2 = new Line2(line2Geometry, line2Material);
-        scene.add(line2);
-        this.labels.push(line2);
-
         // Draw angle arc
-        this._createAngleArc(scene);
+        this._updateAngleArc(scene);
       }
     }
   }
 
   /**
-   * Create visual arc showing the angle
+   * Update marker spheres (reuse existing or create new)
    * @private
    */
-  _createAngleArc(scene) {
+  _updateMarkers(scene) {
+    const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+
+    for (let i = 0; i < this.points.length; i++) {
+      const point = this.points[i];
+
+      if (i < this.markers.length) {
+        // Update existing marker position
+        this.markers[i].position.copy(point);
+      } else {
+        // Create new marker
+        const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+        marker.renderOrder = 2;
+        marker.position.copy(point);
+        scene.add(marker);
+        this.markers.push(marker);
+      }
+
+      // Make the vertex (middle point) slightly larger
+      if (i === 1 && this.points.length >= 2) {
+        this.markers[i].scale.set(1.5, 1.5, 1.5);
+      }
+    }
+  }
+
+  /**
+   * Update lines (reuse existing or create new)
+   * @private
+   */
+  _updateLines(scene) {
+    // Line from p1 to vertex (p2)
+    if (!this.lines) {
+      const line1Geometry = new LineGeometry();
+      const lineMaterial = new LineMaterial({
+        color: 0xffaa00,
+        linewidth: 3,
+        resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+        transparent: true,
+        opacity: 0.9,
+        depthTest: true,
+        depthWrite: true,
+      });
+      this.lines = new Line2(line1Geometry, lineMaterial);
+      this.lines.renderOrder = 1;
+      scene.add(this.lines);
+    }
+
+    // Update line1 positions
+    const positions1 = [
+      this.points[0].x, this.points[0].y, this.points[0].z,
+      this.points[1].x, this.points[1].y, this.points[1].z
+    ];
+    this.lines.geometry.setPositions(positions1);
+    this.lines.computeLineDistances();
+    this.lines.geometry.computeBoundingSphere();
+
+    if (this.points.length === 3) {
+      // Find or create line2
+      let line2 = this.labels.find(obj => obj.isLine2 && obj.userData && obj.userData.isLine2);
+
+      if (!line2) {
+        const line2Geometry = new LineGeometry();
+        const line2Material = new LineMaterial({
+          color: 0xffaa00,
+          linewidth: 3,
+          resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+          transparent: true,
+          opacity: 0.9,
+          depthTest: true,
+          depthWrite: true,
+        });
+        line2 = new Line2(line2Geometry, line2Material);
+        line2.renderOrder = 1;
+        line2.userData.isLine2 = true;
+        scene.add(line2);
+        this.labels.push(line2);
+      }
+
+      // Update line2 positions
+      const positions2 = [
+        this.points[1].x, this.points[1].y, this.points[1].z,
+        this.points[2].x, this.points[2].y, this.points[2].z
+      ];
+      line2.geometry.setPositions(positions2);
+      line2.computeLineDistances();
+      line2.geometry.computeBoundingSphere();
+    }
+  }
+
+  /**
+   * Update visual arc showing the angle (reuse existing or create new)
+   * @private
+   */
+  _updateAngleArc(scene) {
     if (this.points.length < 3) return;
 
     const p1 = this.points[0];
@@ -183,30 +224,46 @@ export class AngleMeasurement extends Measurement {
       arcPoints.push(point);
     }
 
-    // Create arc line using Line2
+    // Create arc positions array
     const arcPositions = [];
     for (const point of arcPoints) {
       arcPositions.push(point.x, point.y, point.z);
     }
 
-    const arcGeometry = new LineGeometry();
-    arcGeometry.setPositions(arcPositions);
+    // Find or create arc line
+    let arc = this.labels.find(obj => obj.isLine && obj.userData && obj.userData.isArc);
 
-    const arcMaterial = new LineMaterial({
-      color: 0xffaa00,
-      linewidth: 2,
-      transparent: true,
-      opacity: 0.8,
-    });
-    arcMaterial.resolution.set(window.innerWidth, window.innerHeight);
+    if (!arc) {
+      const arcGeometry = new THREE.BufferGeometry();
+      const arcMaterial = new THREE.LineBasicMaterial({
+        color: 0xffaa00,
+        transparent: true,
+        opacity: 0.8,
+      });
+      arc = new THREE.Line(arcGeometry, arcMaterial);
+      arc.renderOrder = 1;
+      arc.userData.isArc = true; // Mark as arc for identification
+      scene.add(arc);
+      this.labels.push(arc);
 
-    const arc = new Line2(arcGeometry, arcMaterial);
-    scene.add(arc);
-    this.labels.push(arc);
+      // Initialize with empty positions
+      arc.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+    }
 
-    // Add angle label near the arc
+    // Check if we need to update arc positions (arc always has segments+1 points)
+    const arcAttr = arc.geometry.getAttribute('position');
+    const arcNeedsUpdate = !arcAttr || arcAttr.count !== (segments + 1);
+
+    if (arcNeedsUpdate) {
+      // Update arc positions
+      const arcPositionsArray = new Float32Array(arcPositions);
+      arc.geometry.setAttribute('position', new THREE.BufferAttribute(arcPositionsArray, 3));
+      arc.geometry.computeBoundingSphere();
+    }
+
+    // Find or create angle label
     const result = this.getResult();
-    const label = new TextSprite(`${result.angleDegrees.toFixed(1)}°`);
+    let label = this.labels.find(obj => obj.isTextSprite || (obj.material && obj.material.map));
 
     // Position label along the bisector of the angle
     const bisector = new THREE.Vector3()
@@ -215,13 +272,20 @@ export class AngleMeasurement extends Measurement {
       .multiplyScalar(arcRadius * 1.5)
       .add(vertex);
 
+    if (!label) {
+      label = new TextSprite(`${result.angleDegrees.toFixed(1)}°`);
+      label.renderOrder = 3;
+      label.backgroundColor = 'rgba(255, 170, 0, 0.8)';
+      label.scale.multiplyScalar(0.5);
+      label.userData.isAngleLabel = true;
+      scene.add(label);
+      this.labels.push(label);
+    }
+
+    // Update label text and position
     label.position.copy(bisector);
-    label.backgroundColor = 'rgba(255, 170, 0, 0.8)';
-
-    // Fixed scale for consistent size
-    label.scale.multiplyScalar(0.5);
-
-    scene.add(label);
-    this.labels.push(label);
+    if (label.text !== undefined) {
+      label.text = `${result.angleDegrees.toFixed(1)}°`;
+    }
   }
 }

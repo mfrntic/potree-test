@@ -313,16 +313,23 @@ export class MeasurementManager {
     );
 
     if (pickPoint) {
-      console.log(`Picked point at: ${pickPoint.position.toArray().map(v => v.toFixed(2)).join(', ')}`);
+      // Following Potree's approach: store point object with position property
+      // pickPoint.position is the picked position
+      const point = {
+        position: pickPoint.position
+      };
+
+      console.log(`Picked point at: ${point.position.toArray().map(v => v.toFixed(2)).join(', ')}`);
 
       // Store old point count
       const oldPointCount = this.currentMeasurement.points.length;
 
-      // Add point to measurement
-      this.currentMeasurement.addPoint(pickPoint.position);
+      // Add point object to measurement (Potree style)
+      this.currentMeasurement.addPoint(point);
 
       // Only update visuals if a new point was actually added
       if (this.currentMeasurement.points.length > oldPointCount) {
+        // Add measurements to MAIN scene (not separate scene)
         this.currentMeasurement.createVisuals(this.viewer.scene);
 
         // Emit update event

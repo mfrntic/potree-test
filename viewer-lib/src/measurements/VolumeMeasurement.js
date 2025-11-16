@@ -91,61 +91,87 @@ export class VolumeMeasurement extends Measurement {
    * @param {THREE.Scene} scene - Three.js scene
    */
   createVisuals(scene) {
-    // Clear existing visuals
-    this.clear(scene);
-
     if (this.points.length === 0) return;
 
-    // Create sphere markers for points
-    const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+    // Update or create markers
+    this._updateMarkers(scene);
 
-    // Center point (different color and larger)
-    if (this.points.length >= 1) {
-      const centerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-      const centerMarker = new THREE.Mesh(markerGeometry, centerMaterial);
-      centerMarker.position.copy(this.points[0]);
-      centerMarker.scale.set(1.5, 1.5, 1.5);
-      scene.add(centerMarker);
-      this.markers.push(centerMarker);
-    }
-
-    // Radius point
+    // Update or create lines and sphere
     if (this.points.length >= 2) {
-      const radiusMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-      const radiusMarker = new THREE.Mesh(markerGeometry, radiusMaterial);
-      radiusMarker.position.copy(this.points[1]);
-      scene.add(radiusMarker);
-      this.markers.push(radiusMarker);
-
-      // Draw radius line using Line2
-      const lineGeometry = new LineGeometry();
-      lineGeometry.setPositions([
-        this.points[0].x, this.points[0].y, this.points[0].z,
-        this.points[1].x, this.points[1].y, this.points[1].z
-      ]);
-
-      const lineMaterial = new LineMaterial({
-        color: 0x00ffff,
-        linewidth: 3,
-        transparent: true,
-        opacity: 0.9,
-      });
-      lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
-
-      this.lines = new Line2(lineGeometry, lineMaterial);
-      scene.add(this.lines);
-
-      // Draw sphere wireframe
-      this._createSphereWireframe(scene);
+      this._updateRadiusLine(scene);
+      this._updateSphereWireframe(scene);
     }
   }
 
   /**
-   * Create sphere/ellipsoid wireframe visualization
+   * Update marker spheres (reuse existing or create new)
+   * @private
+   */
+  _updateMarkers(scene) {
+    const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+
+    // Center point (larger)
+    if (this.points.length >= 1) {
+      if (this.markers.length < 1) {
+        const centerMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+        centerMarker.renderOrder = 2;
+        centerMarker.scale.set(1.5, 1.5, 1.5);
+        scene.add(centerMarker);
+        this.markers.push(centerMarker);
+      }
+      this.markers[0].position.copy(this.points[0]);
+    }
+
+    // Radius point
+    if (this.points.length >= 2) {
+      if (this.markers.length < 2) {
+        const radiusMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+        radiusMarker.renderOrder = 2;
+        scene.add(radiusMarker);
+        this.markers.push(radiusMarker);
+      }
+      this.markers[1].position.copy(this.points[1]);
+    }
+  }
+
+  /**
+   * Update radius line (reuse existing or create new)
+   * @private
+   */
+  _updateRadiusLine(scene) {
+    if (!this.lines) {
+      const lineGeometry = new LineGeometry();
+      const lineMaterial = new LineMaterial({
+        color: 0x00ffff,
+        linewidth: 3,
+        resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+        transparent: true,
+        opacity: 0.9,
+        depthTest: true,
+        depthWrite: true,
+      });
+      this.lines = new Line2(lineGeometry, lineMaterial);
+      this.lines.renderOrder = 1;
+      scene.add(this.lines);
+    }
+
+    // Update radius line positions
+    const positions = [
+      this.points[0].x, this.points[0].y, this.points[0].z,
+      this.points[1].x, this.points[1].y, this.points[1].z
+    ];
+    this.lines.geometry.setPositions(positions);
+    this.lines.computeLineDistances();
+    this.lines.geometry.computeBoundingSphere();
+  }
+
+  /**
+   * Update sphere/ellipsoid wireframe visualization (reuse existing or create new)
    * Based on Potree's SphereVolume wireframe
    * @private
    */
-  _createSphereWireframe(scene) {
+  _updateSphereWireframe(scene) {
     if (this.points.length < 2) return;
 
     const center = this.points[0];
@@ -153,18 +179,15 @@ export class VolumeMeasurement extends Measurement {
     const ry = this.scale.y;
     const rz = this.scale.z;
 
-    // Create wireframe similar to Potree's SphereVolume
-    const frameGeometry = new THREE.BufferGeometry();
+    // Calculate wireframe positions
     const framePositions = [];
-
-    // Number of segments for circles
     const segments = 32;
-    const latitudes = 8; // Horizontal rings
-    const longitudes = 5; // Vertical segments
+    const latitudes = 8;
+    const longitudes = 5;
 
     // Create horizontal rings (latitude lines) at different Y heights
     for (let i = 0; i < latitudes; i++) {
-      const lat = ((i / latitudes) - 0.5) * Math.PI; // -π/2 to π/2
+      const lat = ((i / latitudes) - 0.5) * Math.PI;
       const yPos = ry * Math.sin(lat);
       const radiusAtLat = Math.cos(lat);
 
@@ -190,61 +213,85 @@ export class VolumeMeasurement extends Measurement {
       }
     }
 
-    frameGeometry.setAttribute('position',
+    // Find or create wireframe
+    let frame = this.labels.find(l => l.userData && l.userData.isWireframe);
+
+    if (!frame) {
+      const frameGeometry = new THREE.BufferGeometry();
+      const frameMaterial = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.5,
+      });
+      frame = new THREE.LineSegments(frameGeometry, frameMaterial);
+      frame.renderOrder = 1;
+      frame.userData.isWireframe = true;
+      scene.add(frame);
+      this.labels.push(frame);
+    }
+
+    // Update wireframe positions
+    frame.geometry.setAttribute('position',
       new THREE.Float32BufferAttribute(framePositions, 3)
     );
+    frame.geometry.attributes.position.needsUpdate = true;
 
-    const frameMaterial = new THREE.LineBasicMaterial({
-      color: 0x00ffff,
-      transparent: true,
-      opacity: 0.5,
-    });
+    // Find or create sphere mesh
+    let sphere = this.labels.find(l => l.userData && l.userData.isSphereMesh);
 
-    const frame = new THREE.LineSegments(frameGeometry, frameMaterial);
-    scene.add(frame);
-    this.labels.push(frame);
+    if (!sphere) {
+      const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+      const sphereMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.DoubleSide,
+      });
+      sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      sphere.renderOrder = 2;
+      sphere.userData.isSphereMesh = true;
+      scene.add(sphere);
+      this.labels.push(sphere);
+    }
 
-    // Also add a semi-transparent sphere mesh
-    const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-    const sphereMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ffff,
-      transparent: true,
-      opacity: 0.1,
-      side: THREE.DoubleSide,
-    });
-    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    // Update sphere position and scale
     sphere.position.copy(center);
     sphere.scale.set(rx, ry, rz);
-    scene.add(sphere);
-    this.labels.push(sphere);
 
-    // Add volume label at top of sphere
+    // Update labels
     const result = this.getResult();
-    const label = new TextSprite(`V: ${result.volume.toFixed(2)} m³`);
 
-    label.position.set(
-      center.x,
-      center.y + ry + 0.5,
-      center.z
-    );
-    label.backgroundColor = 'rgba(0, 255, 255, 0.8)';
+    // Find or create volume label
+    let volumeLabel = this.labels.find(l => l.material && l.material.map && l.userData && l.userData.isVolumeLabel);
 
-    // Fixed scale for consistent size
-    label.scale.multiplyScalar(0.5);
+    if (!volumeLabel) {
+      volumeLabel = new TextSprite(`V: ${result.volume.toFixed(2)} m³`);
+      volumeLabel.renderOrder = 3;
+      volumeLabel.backgroundColor = 'rgba(0, 255, 255, 0.8)';
+      volumeLabel.scale.multiplyScalar(0.5);
+      volumeLabel.userData.isVolumeLabel = true;
+      scene.add(volumeLabel);
+      this.labels.push(volumeLabel);
+    }
 
-    scene.add(label);
-    this.labels.push(label);
+    volumeLabel.text = `V: ${result.volume.toFixed(2)} m³`;
+    volumeLabel.position.set(center.x, center.y + ry + 0.5, center.z);
 
-    // Add radius label
-    const radiusLabel = new TextSprite(`r: ${result.radius.toFixed(2)} m`);
+    // Find or create radius label
+    let radiusLabel = this.labels.find(l => l.material && l.material.map && l.userData && l.userData.isRadiusLabel);
     const radiusPos = new THREE.Vector3().addVectors(center, this.points[1]).multiplyScalar(0.5);
+
+    if (!radiusLabel) {
+      radiusLabel = new TextSprite(`r: ${result.radius.toFixed(2)} m`);
+      radiusLabel.renderOrder = 3;
+      radiusLabel.backgroundColor = 'rgba(0, 255, 255, 0.7)';
+      radiusLabel.scale.multiplyScalar(0.5);
+      radiusLabel.userData.isRadiusLabel = true;
+      scene.add(radiusLabel);
+      this.labels.push(radiusLabel);
+    }
+
+    radiusLabel.text = `r: ${result.radius.toFixed(2)} m`;
     radiusLabel.position.copy(radiusPos);
-    radiusLabel.backgroundColor = 'rgba(0, 255, 255, 0.7)';
-
-    // Fixed scale for consistent size
-    radiusLabel.scale.multiplyScalar(0.5);
-
-    scene.add(radiusLabel);
-    this.labels.push(radiusLabel);
   }
 }

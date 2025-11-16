@@ -165,6 +165,8 @@ export class PotreeViewer extends EventEmitter {
       const measurements = this.measurementManager.measurements;
       for (const measurement of measurements) {
         measurement.update();
+        // Update marker and label scales to maintain consistent screen size
+        measurement.updateMarkerScales(this.camera);
       }
     }
 

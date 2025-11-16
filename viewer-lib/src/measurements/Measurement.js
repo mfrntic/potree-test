@@ -125,7 +125,7 @@ export class Measurement {
 
     const referenceDistance = 10; // Distance at which base scale looks good
 
-    // Update marker spheres
+    // Update marker spheres - scale with distance so they appear consistent size
     for (const marker of this.markers) {
       if (!marker.position) continue;
 
@@ -137,16 +137,16 @@ export class Measurement {
     }
 
     // Update text labels (TextSprites)
+    // Labels should scale the SAME as markers - proportional to distance
     for (const label of this.labels) {
       // Check if it's a TextSprite (has position and material.map from canvas)
       if (label.position && label.material && label.material.map) {
         const distance = camera.position.distanceTo(label.position);
 
-        // TextSprites need different scaling - they already have base scale
-        // We just multiply their existing scale by distance factor
-        const baseLabelScale = 0.5; // This was set in createVisuals
+        // SAME scaling as markers: scale proportional to distance
+        const baseLabelScale = 0.3; // Base scale from measurement files
         const scaleFactor = (distance / referenceDistance) * baseLabelScale;
-        const clampedScale = Math.max(0.1, Math.min(2.0, scaleFactor));
+        const clampedScale = Math.max(0.05, Math.min(1.5, scaleFactor));
 
         // Preserve aspect ratio from original scale
         const aspect = label.scale.x / label.scale.y;

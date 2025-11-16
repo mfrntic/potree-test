@@ -204,7 +204,7 @@ export class HeightMeasurement extends Measurement {
 
     if (!label) {
       label = new TextSprite(`${result.height.toFixed(2)} m`);
-      label.scale.multiplyScalar(0.5);
+      label.scale.multiplyScalar(0.3);
       label.renderOrder = 3; // Render labels on top
       this.scene.add(label);
       this.labels.push(label);

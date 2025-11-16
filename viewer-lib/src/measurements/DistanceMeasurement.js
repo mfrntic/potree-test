@@ -160,7 +160,7 @@ export class DistanceMeasurement extends Measurement {
         // Create new label
         const label = new TextSprite(`${distance.toFixed(2)} m`);
         label.position.copy(midpoint);
-        label.scale.multiplyScalar(0.5);
+        label.scale.multiplyScalar(0.3);
         label.renderOrder = 3; // Render labels on top
         this.scene.add(label);
         this.labels.push(label);
@@ -179,7 +179,7 @@ export class DistanceMeasurement extends Measurement {
         const newTotalLabel = new TextSprite(`Total: ${result.distanceTotal.toFixed(2)} m`);
         newTotalLabel.position.set(lastPoint.x, lastPoint.y + 0.5, lastPoint.z);
         newTotalLabel.backgroundColor = 'rgba(255, 0, 0, 0.8)';
-        newTotalLabel.scale.multiplyScalar(0.6);
+        newTotalLabel.scale.multiplyScalar(0.3);
         newTotalLabel.userData.isTotalLabel = true;
         newTotalLabel.renderOrder = 3; // Render labels on top
         this.scene.add(newTotalLabel);

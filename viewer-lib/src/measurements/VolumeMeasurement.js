@@ -19,7 +19,7 @@ export class VolumeMeasurement extends Measurement {
 
   /**
    * Add a point to the measurement
-   * @param {THREE.Vector3} point - 3D point
+   * @param {Object} point - Point object {position: Vector3}
    */
   addPoint(point) {
     if (this.points.length >= this.maxPoints) {
@@ -27,19 +27,18 @@ export class VolumeMeasurement extends Measurement {
       return;
     }
 
-    this.points.push(point.clone());
+    // Use base class addPoint which handles wrapping Vector3 in object
+    super.addPoint(point);
 
     // When second point is added, calculate initial radius
     if (this.points.length === 2) {
-      const center = this.points[0];
-      const radiusPoint = this.points[1];
+      const center = this.points[0].position;
+      const radiusPoint = this.points[1].position;
       const radius = center.distanceTo(radiusPoint);
 
       // Set uniform scale (sphere)
       this.scale.set(radius, radius, radius);
     }
-
-    this.update();
 
     // Auto-finish when 2 points are added
     if (this.points.length === this.maxPoints) {
@@ -48,10 +47,19 @@ export class VolumeMeasurement extends Measurement {
   }
 
   /**
-   * Update the measurement visualization
+   * Update the measurement visualization (called every frame like Potree)
    */
   update() {
-    // Visualization update handled in createVisuals
+    if (this.points.length === 0) return;
+
+    // Update markers
+    this._updateMarkers();
+
+    // Update lines and sphere if we have 2 points
+    if (this.points.length >= 2) {
+      this._updateRadiusLine();
+      this._updateSphereWireframe();
+    }
   }
 
   /**
@@ -81,33 +89,29 @@ export class VolumeMeasurement extends Measurement {
         radius: avgRadius,
         radii: { rx, ry, rz },
         surfaceArea,
-        center: this.points[0].clone(),
+        center: this.points[0].position.clone(),
       };
     });
   }
 
   /**
-   * Create visual representation in the scene
+   * Create visual representation in the scene (called once when first point is added)
    * @param {THREE.Scene} scene - Three.js scene
    */
   createVisuals(scene) {
-    if (this.points.length === 0) return;
+    // Store scene reference for later updates
+    this.scene = scene;
 
-    // Update or create markers
-    this._updateMarkers(scene);
-
-    // Update or create lines and sphere
-    if (this.points.length >= 2) {
-      this._updateRadiusLine(scene);
-      this._updateSphereWireframe(scene);
-    }
+    // Initial update will create all visuals
+    this.update();
   }
 
   /**
    * Update marker spheres (reuse existing or create new)
    * @private
    */
-  _updateMarkers(scene) {
+  _updateMarkers() {
+    if (!this.scene) return;
     const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
     const markerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
 
@@ -117,10 +121,10 @@ export class VolumeMeasurement extends Measurement {
         const centerMarker = new THREE.Mesh(markerGeometry, markerMaterial);
         centerMarker.renderOrder = 2;
         centerMarker.scale.set(1.5, 1.5, 1.5);
-        scene.add(centerMarker);
+        this.scene.add(centerMarker);
         this.markers.push(centerMarker);
       }
-      this.markers[0].position.copy(this.points[0]);
+      this.markers[0].position.copy(this.points[0].position);
     }
 
     // Radius point
@@ -128,18 +132,23 @@ export class VolumeMeasurement extends Measurement {
       if (this.markers.length < 2) {
         const radiusMarker = new THREE.Mesh(markerGeometry, markerMaterial);
         radiusMarker.renderOrder = 2;
-        scene.add(radiusMarker);
+        this.scene.add(radiusMarker);
         this.markers.push(radiusMarker);
       }
-      this.markers[1].position.copy(this.points[1]);
+      this.markers[1].position.copy(this.points[1].position);
     }
   }
 
   /**
    * Update radius line (reuse existing or create new)
+   * Following Potree's EXACT approach: position line at start point, use relative coords
    * @private
    */
-  _updateRadiusLine(scene) {
+  _updateRadiusLine() {
+    if (!this.scene) return;
+    const p1 = this.points[0].position;
+    const p2 = this.points[1].position;
+
     if (!this.lines) {
       const lineGeometry = new LineGeometry();
       const lineMaterial = new LineMaterial({
@@ -153,13 +162,14 @@ export class VolumeMeasurement extends Measurement {
       });
       this.lines = new Line2(lineGeometry, lineMaterial);
       this.lines.renderOrder = 1;
-      scene.add(this.lines);
+      this.scene.add(this.lines);
     }
 
-    // Update radius line positions
+    // CRITICAL: Position line at p1, use relative coords for p2
+    this.lines.position.copy(p1);
     const positions = [
-      this.points[0].x, this.points[0].y, this.points[0].z,
-      this.points[1].x, this.points[1].y, this.points[1].z
+      0, 0, 0,                           // p1 (origin)
+      p2.x - p1.x, p2.y - p1.y, p2.z - p1.z  // p2 relative to p1
     ];
     this.lines.geometry.setPositions(positions);
     this.lines.computeLineDistances();
@@ -171,10 +181,11 @@ export class VolumeMeasurement extends Measurement {
    * Based on Potree's SphereVolume wireframe
    * @private
    */
-  _updateSphereWireframe(scene) {
+  _updateSphereWireframe() {
+    if (!this.scene) return;
     if (this.points.length < 2) return;
 
-    const center = this.points[0];
+    const center = this.points[0].position;
     const rx = this.scale.x;
     const ry = this.scale.y;
     const rz = this.scale.z;
@@ -226,7 +237,7 @@ export class VolumeMeasurement extends Measurement {
       frame = new THREE.LineSegments(frameGeometry, frameMaterial);
       frame.renderOrder = 1;
       frame.userData.isWireframe = true;
-      scene.add(frame);
+      this.scene.add(frame);
       this.labels.push(frame);
     }
 
@@ -250,7 +261,7 @@ export class VolumeMeasurement extends Measurement {
       sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
       sphere.renderOrder = 2;
       sphere.userData.isSphereMesh = true;
-      scene.add(sphere);
+      this.scene.add(sphere);
       this.labels.push(sphere);
     }
 
@@ -268,9 +279,9 @@ export class VolumeMeasurement extends Measurement {
       volumeLabel = new TextSprite(`V: ${result.volume.toFixed(2)} m³`);
       volumeLabel.renderOrder = 3;
       volumeLabel.backgroundColor = 'rgba(0, 255, 255, 0.8)';
-      volumeLabel.scale.multiplyScalar(0.5);
+      volumeLabel.scale.multiplyScalar(0.3);
       volumeLabel.userData.isVolumeLabel = true;
-      scene.add(volumeLabel);
+      this.scene.add(volumeLabel);
       this.labels.push(volumeLabel);
     }
 
@@ -279,15 +290,15 @@ export class VolumeMeasurement extends Measurement {
 
     // Find or create radius label
     let radiusLabel = this.labels.find(l => l.material && l.material.map && l.userData && l.userData.isRadiusLabel);
-    const radiusPos = new THREE.Vector3().addVectors(center, this.points[1]).multiplyScalar(0.5);
+    const radiusPos = new THREE.Vector3().addVectors(center, this.points[1].position).multiplyScalar(0.5);
 
     if (!radiusLabel) {
       radiusLabel = new TextSprite(`r: ${result.radius.toFixed(2)} m`);
       radiusLabel.renderOrder = 3;
       radiusLabel.backgroundColor = 'rgba(0, 255, 255, 0.7)';
-      radiusLabel.scale.multiplyScalar(0.5);
+      radiusLabel.scale.multiplyScalar(0.3);
       radiusLabel.userData.isRadiusLabel = true;
-      scene.add(radiusLabel);
+      this.scene.add(radiusLabel);
       this.labels.push(radiusLabel);
     }
 

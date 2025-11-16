@@ -17,7 +17,7 @@ export class AngleMeasurement extends Measurement {
 
   /**
    * Add a point to the measurement
-   * @param {THREE.Vector3} point - 3D point
+   * @param {Object} point - Point object {position: Vector3}
    */
   addPoint(point) {
     if (this.points.length >= this.maxPoints) {
@@ -25,8 +25,8 @@ export class AngleMeasurement extends Measurement {
       return;
     }
 
-    this.points.push(point.clone());
-    this.update();
+    // Use base class addPoint which handles wrapping Vector3 in object
+    super.addPoint(point);
 
     // Auto-finish when 3 points are added
     if (this.points.length === this.maxPoints) {
@@ -35,10 +35,23 @@ export class AngleMeasurement extends Measurement {
   }
 
   /**
-   * Update the measurement visualization
+   * Update the measurement visualization (called every frame like Potree)
    */
   update() {
-    // Visualization update handled in createVisuals
+    if (this.points.length === 0) return;
+
+    // Update markers
+    this._updateMarkers();
+
+    // Update lines if we have at least 2 points
+    if (this.points.length >= 2) {
+      this._updateLines();
+    }
+
+    // Update label if we have all 3 points
+    if (this.points.length === 3) {
+      this._updateLabel();
+    }
   }
 
   /**
@@ -50,9 +63,9 @@ export class AngleMeasurement extends Measurement {
         return { angleDegrees: 0, angleRadians: 0 };
       }
 
-      const p1 = this.points[0]; // First point
-      const p2 = this.points[1]; // Vertex (middle point)
-      const p3 = this.points[2]; // Third point
+      const p1 = this.points[0].position; // First point
+      const p2 = this.points[1].position; // Vertex (middle point)
+      const p3 = this.points[2].position; // Third point
 
       // Create vectors from vertex to the two other points
       const v1 = new THREE.Vector3().subVectors(p1, p2);
@@ -71,36 +84,28 @@ export class AngleMeasurement extends Measurement {
   }
 
   /**
-   * Create visual representation in the scene
+   * Create visual representation in the scene (called once when first point is added)
    * @param {THREE.Scene} scene - Three.js scene
    */
   createVisuals(scene) {
-    if (this.points.length === 0) return;
+    // Store scene reference for later updates
+    this.scene = scene;
 
-    // Update or create markers
-    this._updateMarkers(scene);
-
-    // Update or create lines
-    if (this.points.length >= 2) {
-      this._updateLines(scene);
-
-      if (this.points.length === 3) {
-        // Draw angle arc
-        this._updateAngleArc(scene);
-      }
-    }
+    // Initial update will create all visuals
+    this.update();
   }
 
   /**
    * Update marker spheres (reuse existing or create new)
    * @private
    */
-  _updateMarkers(scene) {
+  _updateMarkers() {
+    if (!this.scene) return;
     const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
     const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
 
     for (let i = 0; i < this.points.length; i++) {
-      const point = this.points[i];
+      const point = this.points[i].position;
 
       if (i < this.markers.length) {
         // Update existing marker position
@@ -110,7 +115,7 @@ export class AngleMeasurement extends Measurement {
         const marker = new THREE.Mesh(markerGeometry, markerMaterial);
         marker.renderOrder = 2;
         marker.position.copy(point);
-        scene.add(marker);
+        this.scene.add(marker);
         this.markers.push(marker);
       }
 
@@ -123,9 +128,15 @@ export class AngleMeasurement extends Measurement {
 
   /**
    * Update lines (reuse existing or create new)
+   * Following Potree's EXACT approach: position line at start point, use relative coords
    * @private
    */
-  _updateLines(scene) {
+  _updateLines() {
+    if (!this.scene) return;
+
+    const p1 = this.points[0].position;
+    const p2 = this.points[1].position; // Vertex
+
     // Line from p1 to vertex (p2)
     if (!this.lines) {
       const line1Geometry = new LineGeometry();
@@ -140,20 +151,23 @@ export class AngleMeasurement extends Measurement {
       });
       this.lines = new Line2(line1Geometry, lineMaterial);
       this.lines.renderOrder = 1;
-      scene.add(this.lines);
+      this.scene.add(this.lines);
     }
 
-    // Update line1 positions
+    // CRITICAL: Position line at p1, use relative coords for p2
+    this.lines.position.copy(p1);
     const positions1 = [
-      this.points[0].x, this.points[0].y, this.points[0].z,
-      this.points[1].x, this.points[1].y, this.points[1].z
+      0, 0, 0,                           // p1 (origin)
+      p2.x - p1.x, p2.y - p1.y, p2.z - p1.z  // p2 relative to p1
     ];
     this.lines.geometry.setPositions(positions1);
     this.lines.computeLineDistances();
     this.lines.geometry.computeBoundingSphere();
 
     if (this.points.length === 3) {
-      // Find or create line2
+      const p3 = this.points[2].position;
+
+      // Find or create line2 (from vertex p2 to p3)
       let line2 = this.labels.find(obj => obj.isLine2 && obj.userData && obj.userData.isLine2);
 
       if (!line2) {
@@ -170,14 +184,15 @@ export class AngleMeasurement extends Measurement {
         line2 = new Line2(line2Geometry, line2Material);
         line2.renderOrder = 1;
         line2.userData.isLine2 = true;
-        scene.add(line2);
+        this.scene.add(line2);
         this.labels.push(line2);
       }
 
-      // Update line2 positions
+      // CRITICAL: Position line2 at p2 (vertex), use relative coords for p3
+      line2.position.copy(p2);
       const positions2 = [
-        this.points[1].x, this.points[1].y, this.points[1].z,
-        this.points[2].x, this.points[2].y, this.points[2].z
+        0, 0, 0,                           // p2 (origin)
+        p3.x - p2.x, p3.y - p2.y, p3.z - p2.z  // p3 relative to p2
       ];
       line2.geometry.setPositions(positions2);
       line2.computeLineDistances();
@@ -189,12 +204,13 @@ export class AngleMeasurement extends Measurement {
    * Update visual arc showing the angle (reuse existing or create new)
    * @private
    */
-  _updateAngleArc(scene) {
+  _updateAngleArc() {
+    if (!this.scene) return;
     if (this.points.length < 3) return;
 
-    const p1 = this.points[0];
-    const vertex = this.points[1];
-    const p3 = this.points[2];
+    const p1 = this.points[0].position;
+    const vertex = this.points[1].position;
+    const p3 = this.points[2].position;
 
     // Create vectors from vertex
     const v1 = new THREE.Vector3().subVectors(p1, vertex).normalize();
@@ -243,7 +259,7 @@ export class AngleMeasurement extends Measurement {
       arc = new THREE.Line(arcGeometry, arcMaterial);
       arc.renderOrder = 1;
       arc.userData.isArc = true; // Mark as arc for identification
-      scene.add(arc);
+      this.scene.add(arc);
       this.labels.push(arc);
 
       // Initialize with empty positions
@@ -278,7 +294,53 @@ export class AngleMeasurement extends Measurement {
       label.backgroundColor = 'rgba(255, 170, 0, 0.8)';
       label.scale.multiplyScalar(0.5);
       label.userData.isAngleLabel = true;
-      scene.add(label);
+      this.scene.add(label);
+      this.labels.push(label);
+    }
+
+    // Update label text and position
+    label.position.copy(bisector);
+    if (label.text !== undefined) {
+      label.text = `${result.angleDegrees.toFixed(1)}°`;
+    }
+  }
+
+  /**
+   * Update label showing the angle in degrees
+   * @private
+   */
+  _updateLabel() {
+    if (!this.scene) return;
+    if (this.points.length < 3) return;
+
+    const p1 = this.points[0].position;
+    const vertex = this.points[1].position;
+    const p3 = this.points[2].position;
+
+    // Create vectors from vertex
+    const v1 = new THREE.Vector3().subVectors(p1, vertex).normalize();
+    const v2 = new THREE.Vector3().subVectors(p3, vertex).normalize();
+
+    // Get the angle result
+    const result = this.getResult();
+
+    // Find or create angle label
+    let label = this.labels.find(obj => obj.isTextSprite || (obj.material && obj.material.map));
+
+    // Position label along the bisector of the angle
+    const bisector = new THREE.Vector3()
+      .addVectors(v1, v2)
+      .normalize()
+      .multiplyScalar(0.75)
+      .add(vertex);
+
+    if (!label) {
+      label = new TextSprite(`${result.angleDegrees.toFixed(1)}°`);
+      label.renderOrder = 3;
+      label.backgroundColor = 'rgba(255, 170, 0, 0.8)';
+      label.scale.multiplyScalar(0.3);
+      label.userData.isAngleLabel = true;
+      this.scene.add(label);
       this.labels.push(label);
     }
 

@@ -8,7 +8,7 @@ import { TextSprite } from '../utils/TextSprite.js';
 /**
  * Height measurement
  * Measures vertical (Y) difference between two points
- * NOTE: Y axis is up in our coordinate system (point cloud is rotated)
+ * Y axis is up in our coordinate system (point cloud is rotated -90° around X)
  */
 export class HeightMeasurement extends Measurement {
   constructor(id) {
@@ -63,7 +63,7 @@ export class HeightMeasurement extends Measurement {
       const p1 = this.points[0].position;
       const p2 = this.points[1].position;
 
-      // Y is up in our coordinate system (after point cloud rotation)
+      // Y is up in our coordinate system (ground is XZ plane)
       const deltaY = Math.abs(p2.y - p1.y);
       const distance3D = p1.distanceTo(p2);
 
@@ -140,7 +140,7 @@ export class HeightMeasurement extends Measurement {
     // CRITICAL: Position the entire line at p1 (like Potree)
     this.lines.position.copy(p1);
 
-    // Create vertical line using RELATIVE coordinates
+    // Create vertical line using RELATIVE coordinates (Y is up)
     // Start at origin (0,0,0), end at relative position
     const deltaY = p2.y - p1.y;
     const positions = [

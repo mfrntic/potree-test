@@ -126,13 +126,18 @@ export class RadiusMeasurement extends Measurement {
 
   /**
    * Update radius line (reuse existing or create new)
-   * Following Potree's EXACT approach: position line at start point, use relative coords
+   * IMPORTANT: Radius line must be in the SAME PLANE as the circle (horizontal XY plane)
+   * This means we project the edge point onto the horizontal plane at the center's Z level
    * @private
    */
   _updateRadiusLine() {
     if (!this.scene) return;
-    const p1 = this.points[0].position;
-    const p2 = this.points[1].position;
+    const center = this.points[0].position;
+    const edge = this.points[1].position;
+
+    // Project edge point onto horizontal plane (XZ) at center's Y level
+    // This ensures radius line is in the same plane as the circle
+    const edgeProjected = new THREE.Vector3(edge.x, center.y, edge.z);
 
     if (!this.lines) {
       const lineGeometry = new LineGeometry();
@@ -150,11 +155,13 @@ export class RadiusMeasurement extends Measurement {
       this.scene.add(this.lines);
     }
 
-    // CRITICAL: Position line at p1, use relative coords for p2
-    this.lines.position.copy(p1);
+    // CRITICAL: Position line at center, use relative coords for projected edge
+    this.lines.position.copy(center);
     const positions = [
-      0, 0, 0,                           // p1 (origin)
-      p2.x - p1.x, p2.y - p1.y, p2.z - p1.z  // p2 relative to p1
+      0, 0, 0,  // center (origin)
+      edgeProjected.x - center.x,
+      edgeProjected.y - center.y,
+      edgeProjected.z - center.z
     ];
     this.lines.geometry.setPositions(positions);
     this.lines.computeLineDistances();
@@ -202,13 +209,14 @@ export class RadiusMeasurement extends Measurement {
     circle.position.copy(center);
     circle.scale.set(radius, radius, radius);
 
-    // Rotate circle to be in horizontal plane (XZ) with normal pointing up (Y)
-    // First rotate to XZ plane (CircleGeometry is in XY, rotate -90° around X)
+    // Orient circle to lie flat on the ground (XZ plane)
+    // CircleGeometry is in XY plane, rotate -90° around X to make it horizontal
     circle.rotation.x = -Math.PI / 2;
 
-    // Then rotate around Y axis to align with the radius direction in XZ plane
+    // Then rotate around Y axis to align with the radius direction in the horizontal plane
+    // This makes the circle lie flat on the ground, oriented toward the radius direction
     const radiusVec = new THREE.Vector3().subVectors(edge, center);
-    const angleY = Math.atan2(radiusVec.x, radiusVec.z); // Angle in XZ plane
+    const angleY = Math.atan2(radiusVec.x, radiusVec.z);
     circle.rotation.y = angleY;
 
     this.scene.add(circle);

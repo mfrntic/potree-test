@@ -299,8 +299,7 @@ export class PotreeViewer extends EventEmitter {
 
       pco.name = name;
 
-      // Potree uses Z-up coordinate system, Three.js uses Y-up
-      // Rotate to align Z-up with Y-up
+      // Rotate point cloud to make Y-up (ground is XZ plane)
       pco.rotation.x = -Math.PI / 2;
 
       // Add to scene

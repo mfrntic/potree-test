@@ -8,6 +8,8 @@ Modern, framework-agnostic JavaScript library for visualizing large-scale point 
 - 🎯 **Framework-agnostic** - Works with vanilla JS, React, Vue, or any framework
 - 📏 **Built-in measurements** - Distance and height measurements with interactive UI
 - 🎨 **Customizable** - Extensive configuration options for materials, views, and behavior
+- 🌈 **LAS Classification support** - Automatic color-coding based on point classifications (ground=brown, vegetation=green)
+- 💡 **Eye-Dome Lighting (EDL)** - Enhanced depth perception and structure visibility (enabled by default)
 - 📦 **Lightweight** - No jQuery or legacy dependencies
 - 🔧 **Full API** - Programmatic control over viewer, measurements, and camera
 - 🎬 **Event-driven** - Subscribe to viewer events for custom integrations
@@ -152,6 +154,46 @@ viewer.setPointBudget(2_000_000);
 viewer.setBackground('white');
 viewer.setBackground('#87CEEB');
 ```
+
+#### Point Coloring
+
+```javascript
+import { PointColorType } from './viewer-lib/src/index.js';
+
+// Set color mode to LAS classification (automatic, default behavior)
+// This colors points based on their classification: ground=brown, vegetation=green
+viewer.setPointColorType(PointColorType.CLASSIFICATION);
+
+// Switch to RGB colors from point cloud data
+viewer.setPointColorType(PointColorType.RGB);
+
+// Color by elevation/height
+viewer.setPointColorType(PointColorType.ELEVATION);
+
+// Color by intensity
+viewer.setPointColorType(PointColorType.INTENSITY);
+
+// Get current color type
+const colorType = viewer.getPointColorType();
+```
+
+**Available PointColorType values:**
+- `RGB` (0) - RGB colors from point cloud data (default)
+- `CLASSIFICATION` (8) - LAS classification colors ⭐
+- `ELEVATION` (3) - Height-based gradient
+- `INTENSITY` (4) - Intensity-based colors
+- `DEPTH` (2) - Distance from camera
+- `LOD` (6) - Level of detail
+- `NORMAL` (11) - Surface normals
+- And more... (see [CLASSIFICATION_GUIDE.md](./CLASSIFICATION_GUIDE.md))
+
+**Note:** Classification mode requires point cloud with classification data. It uses ASPRS LAS standard colors:
+- Class 2 (Ground/Bark): Brown RGB(160, 82, 45)
+- Class 3 (Low Vegetation): Light Green RGB(0, 255, 0)
+- Class 4 (Medium Vegetation): Medium Green RGB(0, 204, 0)
+- Class 5 (High Vegetation): Dark Green RGB(0, 153, 0)
+
+See [CLASSIFICATION_GUIDE.md](./CLASSIFICATION_GUIDE.md) for detailed documentation.
 
 #### Measurements
 

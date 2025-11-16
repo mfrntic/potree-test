@@ -7,6 +7,10 @@ export default defineConfig({
     port: 3000,
     open: '/demo.html',
   },
+  worker: {
+    format: 'es',
+    plugins: () => [],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

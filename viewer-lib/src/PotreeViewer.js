@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Potree, PointSizeType, PointShape } from 'potree-core';
+import { Potree, PointSizeType, PointShape, PointColorType } from 'potree-core';
 import { EventEmitter } from './utils/EventEmitter.js';
 import { mergeConfig, validateConfig } from './utils/config.js';
 import { MeasurementManager } from './measurements/MeasurementManager.js';
@@ -250,7 +250,7 @@ export class PotreeViewer extends EventEmitter {
       const filename = lastSlash >= 0 ? url.substring(lastSlash + 1) : url;
 
       // Load point cloud using potree-core API
-      // The second parameter is the base URL string, not a function
+      // The second parameter is the base URL string
       const pco = await this.potree.loadPointCloud(filename, baseUrl);
 
       pco.name = name;
@@ -273,10 +273,48 @@ export class PotreeViewer extends EventEmitter {
       this.controls.update();
 
       // Configure material AFTER adding to scene
-      // Use setTimeout to ensure material is fully initialized
-      setTimeout(() => {
-        this._configureMaterial(pco.material);
-      }, 100);
+      this._configureMaterial(pco.material);
+
+      // Debug: Check what attributes are available
+      console.log('[PotreeViewer] Point cloud attributes:', {
+        attributes: pco.pcoGeometry?.attributes,
+        hasRGB: pco.pcoGeometry?.attributes?.includes('rgb'),
+        hasClassification: pco.pcoGeometry?.attributes?.includes('classification'),
+      });
+
+      // Debug: Log complete material state
+      console.log('[PotreeViewer] Material state after config:', {
+        pointColorType: pco.material.pointColorType,
+        activeAttributeName: pco.material.activeAttributeName,
+        attributes: Object.keys(pco.material.attributes || {}),
+        pcoAttributes: pco.pcoGeometry?.pointAttributes?.attributes?.map(a => a.name),
+      });
+
+      // CRITICAL FIX: Set pointColorType based on available attributes
+      // potree-core 2.x uses pointColorType enum, NOT activeAttributeName (that was Potree 1.x)
+      if (pco.pcoGeometry?.pointAttributes) {
+        const availableAttrs = pco.pcoGeometry.pointAttributes.attributes || [];
+        const hasRGB = availableAttrs.some(a => a.name === 'rgb' || a.name === 'rgba');
+        const hasClassification = availableAttrs.some(a => a.name === 'classification');
+
+        if (hasRGB) {
+          console.log('[PotreeViewer] RGB attribute found - setting pointColorType to RGB (0)');
+          pco.material.pointColorType = PointColorType.RGB; // 0
+
+          // Set color encoding like official example
+          pco.material.inputColorEncoding = 1;
+          pco.material.outputColorEncoding = 1;
+        } else if (hasClassification) {
+          console.log('[PotreeViewer] No RGB, using classification colors');
+          pco.material.pointColorType = PointColorType.CLASSIFICATION; // 8
+        } else {
+          console.log('[PotreeViewer] No RGB or classification, using elevation colors');
+          pco.material.pointColorType = PointColorType.ELEVATION; // 3
+        }
+
+        // Mark material as needing update
+        pco.material.needsUpdate = true;
+      }
 
       // Emit event
       this.emit('pointcloud-loaded', pco);
@@ -316,6 +354,17 @@ export class PotreeViewer extends EventEmitter {
     } else if (matConfig.shape === 'CIRCLE') {
       material.shape = PointShape.CIRCLE;
     }
+
+    // DON'T explicitly set pointColorType - let potree-core use its default
+    // The original Potree build doesn't set it either, and colors work there
+    // Setting it to RGB might interfere with the default shader behavior
+
+    // Debug: Log material settings
+    console.log('[PotreeViewer] Material configured:', {
+      pointColorType: material.pointColorType,
+      size: material.size,
+      minSize: material.minSize,
+    });
   }
 
   /**
@@ -512,13 +561,13 @@ export class PotreeViewer extends EventEmitter {
     // Position camera higher and looking straight at the crown
     // Target is positioned at crown height (upper part of the tree)
     const crownTarget = new THREE.Vector3(
-      worldCenter.x,
-      worldCenter.y + size.y * 0.25,  // Target at crown height (30% above center)
-      worldCenter.z
+      worldCenter.x ,
+      worldCenter.y + size.y * 0.22,  // Target at crown height (30% above center)
+      worldCenter.z * 0.75
     );
 
     const newPosition = new THREE.Vector3(
-      worldCenter.x - distance * 0.15,   // Slight shift left
+      worldCenter.x - distance  ,   // Slight shift left
       crownTarget.y,                      // Camera at same height as crown
       worldCenter.z + distance            // In front along Z axis
     );
@@ -559,6 +608,39 @@ export class PotreeViewer extends EventEmitter {
   setBackground(background) {
     this._setBackgroundInternal(background);
     this.config.background = background;
+  }
+
+  /**
+   * Set point color type (how points are colored)
+   * @param {PointColorType} colorType - Color type from PointColorType enum
+   * Examples:
+   * - PointColorType.RGB - Use RGB colors from point cloud data
+   * - PointColorType.CLASSIFICATION - Use LAS classification (ground=brown, vegetation=green)
+   * - PointColorType.ELEVATION - Color by height
+   * - PointColorType.INTENSITY - Color by intensity values
+   */
+  setPointColorType(colorType) {
+    if (this.pointClouds.length === 0) {
+      console.warn('No point cloud loaded');
+      return;
+    }
+
+    for (const pco of this.pointClouds) {
+      if (pco.material) {
+        pco.material.pointColorType = colorType;
+      }
+    }
+  }
+
+  /**
+   * Get current point color type
+   * @returns {PointColorType} Current color type
+   */
+  getPointColorType() {
+    if (this.pointClouds.length === 0) {
+      return null;
+    }
+    return this.pointClouds[0].material?.pointColorType;
   }
 
   // ===== MEASUREMENT API =====

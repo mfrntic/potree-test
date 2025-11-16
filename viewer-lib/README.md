@@ -6,77 +6,138 @@ Modern, framework-agnostic JavaScript library for visualizing large-scale point 
 
 - 🚀 **Modern ESM architecture** - Clean imports, no global variables
 - 🎯 **Framework-agnostic** - Works with vanilla JS, React, Vue, or any framework
-- 📏 **Built-in measurements** - Distance and height measurements with interactive UI
-- 🎨 **Customizable** - Extensive configuration options for materials, views, and behavior
-- 🌈 **LAS Classification support** - Automatic color-coding based on point classifications (ground=brown, vegetation=green)
-- 💡 **Eye-Dome Lighting (EDL)** - Enhanced depth perception and structure visibility (enabled by default)
+- 📏 **5 measurement types** - Distance, Height, Angle, Radius, and Volume measurements
+- 🎨 **Customizable UI** - Configurable Toolbar and Console components
+- 🌈 **LAS Classification support** - Automatic color-coding based on point classifications
+- 💡 **Eye-Dome Lighting (EDL)** - Enhanced depth perception and structure visibility
 - 📦 **Lightweight** - No jQuery or legacy dependencies
 - 🔧 **Full API** - Programmatic control over viewer, measurements, and camera
 - 🎬 **Event-driven** - Subscribe to viewer events for custom integrations
 
-## Installation
+## Quick Start
+
+### Installation
+
+#### Option 1: npm Package (Recommended)
+
+```bash
+npm install potree-viewer
+```
+
+#### Option 2: Local Development
 
 ```bash
 npm install potree-core three
 ```
 
-Copy the `viewer-lib` directory to your project or install as a local package.
+Copy the `viewer-lib` directory to your project.
 
-## Quick Start
-
-### Basic Usage
+### Minimal Example
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PotreeViewer Demo</title>
   <style>
-    #viewer-container {
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    #viewer {
       width: 100vw;
       height: 100vh;
     }
   </style>
 </head>
 <body>
-  <div id="viewer-container"></div>
+  <div id="viewer"></div>
 
   <script type="module">
     import { PotreeViewer } from './viewer-lib/src/index.js';
 
     const viewer = new PotreeViewer({
-      container: document.getElementById('viewer-container'),
-      pointCloudUrl: 'path/to/your/cloud/metadata.json',
+      container: document.getElementById('viewer'),
+      pointCloudUrl: 'path/to/metadata.json',
       pointCloudName: 'My Point Cloud',
+      autoFitOnLoad: true,
     });
   </script>
 </body>
 </html>
 ```
 
-### With Toolbar
+### Complete Example with UI
 
 ```javascript
-import { PotreeViewer, Toolbar } from './viewer-lib/src/index.js';
+import { PotreeViewer, Toolbar, PotreeViewerConsole } from 'potree-viewer';
 
+// Create viewer
 const viewer = new PotreeViewer({
-  container: document.getElementById('viewer-container'),
-  pointCloudUrl: 'path/to/cloud/metadata.json',
-  language: 'hr',
+  container: document.getElementById('viewer'),
+  pointCloudUrl: '/pointcloud/metadata.json',
+  pointCloudName: 'Forest Scan',
+  description: 'LiDAR scan of forest area',
+  language: 'en',
   pointBudget: 1_000_000,
+  fov: 80,
   initialView: 'right',
+  material: {
+    size: 0.6,
+    minSize: 0.4,
+    pointSizeType: 'FIXED',
+    shape: 'SQUARE',
+  },
+  background: 'black',
   autoFitOnLoad: true,
+
+  // Callbacks
+  onReady: (viewerInstance) => {
+    console.log('Viewer ready!', viewerInstance);
+  },
+  onPointCloudLoaded: (pointCloud) => {
+    console.log('Point cloud loaded:', pointCloud);
+  },
+  onError: (error) => {
+    console.error('Viewer error:', error);
+  }
 });
 
+// Create toolbar with measurement and view controls
 const toolbar = new Toolbar(viewer, {
-  position: 'top',
-  showMeasurements: true,
-  showViews: true,
+  alignment: 'top-right'
+});
+
+// Create console for status messages and measurement results
+const console = new PotreeViewerConsole(viewer, {
+  position: 'bottom-left',
+  width: '360px',
+  collapsed: false,
+  showTimestamp: true,
+  visible: true
+});
+
+// Keyboard shortcut to toggle console (Ctrl+`)
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === '`') {
+    console.toggleVisibility();
+  }
+});
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+  toolbar.dispose();
+  console.dispose();
+  viewer.dispose();
 });
 ```
 
 ## Configuration
 
-### Viewer Options
+### PotreeViewer Options
 
 ```javascript
 const viewer = new PotreeViewer({
@@ -94,7 +155,8 @@ const viewer = new PotreeViewer({
   fov: number,                         // Field of view in degrees (default: 80)
 
   // Initial view
-  initialView: 'top' | 'front' | 'right' | 'isometric' | { position, target },
+  initialView: 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right' |
+               { position: {x, y, z}, target: {x, y, z} },
 
   // Material settings
   material: {
@@ -118,6 +180,37 @@ const viewer = new PotreeViewer({
 });
 ```
 
+### Toolbar Options
+
+```javascript
+const toolbar = new Toolbar(viewer, {
+  alignment: 'top-right',  // Position of toolbar
+  // Options: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' |
+  //          'left' | 'right' | 'top' | 'bottom'
+
+  buttons: [...],          // Custom button configuration (optional)
+});
+```
+
+**Default toolbar buttons:**
+- **Measurements**: Distance, Height, Angle, Radius, Volume, Clear
+- **Views**: Fit to Screen, Top, Bottom, Front, Back, Left, Right
+
+### PotreeViewerConsole Options
+
+```javascript
+const console = new PotreeViewerConsole(viewer, {
+  position: 'bottom-left', // Position of console
+  // Options: 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right'
+
+  width: '360px',          // Console width
+  collapsed: false,        // Start collapsed
+  showTimestamp: true,     // Show timestamp for each message
+  visible: true,           // Initially visible
+  maxMessages: 50,         // Maximum messages to keep
+});
+```
+
 ## API Reference
 
 ### Viewer Methods
@@ -132,10 +225,10 @@ viewer.setView(
 );
 
 // Set predefined view
-viewer.setNamedView('top' | 'front' | 'right' | 'isometric');
+viewer.setNamedView('top' | 'bottom' | 'front' | 'back' | 'left' | 'right');
 
 // Get current view name
-const viewName = viewer.getNamedView(); // 'top' | 'front' | ... | 'custom'
+const viewName = viewer.getNamedView(); // returns view name or 'custom'
 
 // Fit point cloud to screen
 viewer.fitToScreen();
@@ -158,53 +251,40 @@ viewer.setBackground('#87CEEB');
 #### Point Coloring
 
 ```javascript
-import { PointColorType } from './viewer-lib/src/index.js';
+import { PointColorType } from 'potree-viewer';
 
-// Set color mode to LAS classification (automatic, default behavior)
-// This colors points based on their classification: ground=brown, vegetation=green
-viewer.setPointColorType(PointColorType.CLASSIFICATION);
-
-// Switch to RGB colors from point cloud data
-viewer.setPointColorType(PointColorType.RGB);
-
-// Color by elevation/height
-viewer.setPointColorType(PointColorType.ELEVATION);
-
-// Color by intensity
-viewer.setPointColorType(PointColorType.INTENSITY);
+// Set color mode
+viewer.setPointColorType(PointColorType.RGB);           // RGB colors (default)
+viewer.setPointColorType(PointColorType.CLASSIFICATION); // LAS classification
+viewer.setPointColorType(PointColorType.ELEVATION);     // Height-based gradient
+viewer.setPointColorType(PointColorType.INTENSITY);     // Intensity-based
 
 // Get current color type
 const colorType = viewer.getPointColorType();
 ```
 
 **Available PointColorType values:**
-- `RGB` (0) - RGB colors from point cloud data (default)
-- `CLASSIFICATION` (8) - LAS classification colors ⭐
-- `ELEVATION` (3) - Height-based gradient
-- `INTENSITY` (4) - Intensity-based colors
-- `DEPTH` (2) - Distance from camera
-- `LOD` (6) - Level of detail
-- `NORMAL` (11) - Surface normals
-- And more... (see [CLASSIFICATION_GUIDE.md](./CLASSIFICATION_GUIDE.md))
-
-**Note:** Classification mode requires point cloud with classification data. It uses ASPRS LAS standard colors:
-- Class 2 (Ground/Bark): Brown RGB(160, 82, 45)
-- Class 3 (Low Vegetation): Light Green RGB(0, 255, 0)
-- Class 4 (Medium Vegetation): Medium Green RGB(0, 204, 0)
-- Class 5 (High Vegetation): Dark Green RGB(0, 153, 0)
-
-See [CLASSIFICATION_GUIDE.md](./CLASSIFICATION_GUIDE.md) for detailed documentation.
+- `RGB` - RGB colors from point cloud data
+- `CLASSIFICATION` - LAS classification colors (ground=brown, vegetation=green)
+- `ELEVATION` - Height-based gradient
+- `INTENSITY` - Intensity-based colors
+- `DEPTH` - Distance from camera
+- `LOD` - Level of detail
+- `NORMAL` - Surface normals
 
 #### Measurements
 
 ```javascript
 // Set measurement mode
-viewer.setMeasurementMode('distance');  // Start distance measurement
-viewer.setMeasurementMode('height');    // Start height measurement
+viewer.setMeasurementMode('distance');  // Distance measurement
+viewer.setMeasurementMode('height');    // Height measurement
+viewer.setMeasurementMode('angle');     // Angle measurement
+viewer.setMeasurementMode('radius');    // Radius measurement
+viewer.setMeasurementMode('volume');    // Volume measurement
 viewer.setMeasurementMode('none');      // Return to navigation mode
 
 // Get current mode
-const mode = viewer.getMeasurementMode(); // 'none' | 'distance' | 'height'
+const mode = viewer.getMeasurementMode();
 
 // Programmatic measurement control
 const measurement = viewer.startMeasurement('distance');
@@ -220,7 +300,7 @@ const measurements = viewer.getMeasurements();
 #### Advanced Access
 
 ```javascript
-// Get underlying instances (escape hatch for advanced use)
+// Get underlying instances (for advanced use)
 const potree = viewer.getPotree();      // Potree instance
 const scene = viewer.getScene();        // Three.js scene
 const camera = viewer.getCamera();      // Three.js camera
@@ -234,9 +314,44 @@ const renderer = viewer.getRenderer();  // Three.js renderer
 viewer.dispose();
 ```
 
+### Toolbar Methods
+
+```javascript
+// Create toolbar
+const toolbar = new Toolbar(viewer, options);
+
+// Dispose toolbar
+toolbar.dispose();
+```
+
+### Console Methods
+
+```javascript
+// Show/hide console
+console.show();
+console.hide();
+console.toggleVisibility();
+console.isVisible(); // returns true/false
+
+// Toggle collapsed state
+console.toggle();
+
+// Clear all messages
+console.clear();
+
+// Add custom messages
+console.log('Message', 'info');    // info, success, warning, error
+console.log('Success!', 'success');
+console.log('Warning!', 'warning');
+console.log('Error!', 'error');
+
+// Dispose console
+console.dispose();
+```
+
 ### Events
 
-Subscribe to viewer events using the event emitter API:
+Subscribe to viewer events:
 
 ```javascript
 // Viewer lifecycle
@@ -271,6 +386,10 @@ viewer.on('measurement-finished', (measurement) => {
   console.log('Measurement complete:', measurement.result);
 });
 
+viewer.on('measurement-mode-changed', (mode) => {
+  console.log('Measurement mode:', mode);
+});
+
 viewer.on('measurement-cleared', () => {
   console.log('All measurements cleared');
 });
@@ -279,88 +398,256 @@ viewer.on('measurement-cleared', () => {
 viewer.off('ready', handler);
 ```
 
-### Measurement Results
+## Measurements
 
-#### Distance Measurement
+### Distance Measurement
+
+Click multiple points to create line segments. Press **Enter** to finish or **ESC** to cancel.
 
 ```javascript
+// Start measurement
+viewer.setMeasurementMode('distance');
+
+// Result format
 {
   id: 'measurement-123',
   type: 'distance',
   points: [{ x, y, z }, { x, y, z }, ...],
   result: {
-    distanceTotal: 45.67  // meters
+    distanceTotal: 45.67  // Total distance in meters
   }
 }
 ```
 
-#### Height Measurement
+### Height Measurement
+
+Click 2 points to measure vertical (Y-axis) difference.
 
 ```javascript
+// Start measurement
+viewer.setMeasurementMode('height');
+
+// Result format
 {
   id: 'measurement-456',
   type: 'height',
   points: [{ x, y, z }, { x, y, z }],
   result: {
-    deltaZ: 12.34,        // vertical difference in meters
+    deltaY: 12.34,        // Vertical difference in meters
+    height: 12.34,        // Alias for deltaY
     distance3D: 15.67     // 3D distance in meters
   }
 }
 ```
 
-## Toolbar
+### Angle Measurement
 
-The `Toolbar` class provides a minimal UI for common viewer operations.
+Click 3 points to measure angle formed by the points.
 
 ```javascript
-import { Toolbar } from './viewer-lib/src/index.js';
+// Start measurement
+viewer.setMeasurementMode('angle');
 
-const toolbar = new Toolbar(viewer, {
-  position: 'top',              // 'top' | 'bottom' | 'left' | 'right'
-  showMeasurements: true,       // Show measurement controls
-  showViews: true,              // Show view controls
-  showControls: true,           // Show navigation controls
+// Result format
+{
+  id: 'measurement-789',
+  type: 'angle',
+  points: [{ x, y, z }, { x, y, z }, { x, y, z }],
+  result: {
+    angle: 45.5  // Angle in degrees
+  }
+}
+```
+
+### Radius Measurement
+
+Click 3 points to calculate circle radius.
+
+```javascript
+// Start measurement
+viewer.setMeasurementMode('radius');
+
+// Result format
+{
+  id: 'measurement-abc',
+  type: 'radius',
+  points: [{ x, y, z }, { x, y, z }, { x, y, z }],
+  result: {
+    radius: 5.67  // Radius in meters
+  }
+}
+```
+
+### Volume Measurement
+
+Click multiple points to define polygon on ground, then specify height. Press **Enter** to finish.
+
+```javascript
+// Start measurement
+viewer.setMeasurementMode('volume');
+
+// Result format
+{
+  id: 'measurement-def',
+  type: 'volume',
+  points: [{ x, y, z }, ...],
+  result: {
+    volume: 123.45  // Volume in cubic meters
+  }
+}
+```
+
+## Framework Integration
+
+### React
+
+```jsx
+import { useEffect, useRef } from 'react';
+import { PotreeViewer, Toolbar, PotreeViewerConsole } from 'potree-viewer';
+
+function PointCloudViewer({ pointCloudUrl }) {
+  const containerRef = useRef();
+  const viewerRef = useRef();
+  const toolbarRef = useRef();
+  const consoleRef = useRef();
+
+  useEffect(() => {
+    // Initialize viewer
+    viewerRef.current = new PotreeViewer({
+      container: containerRef.current,
+      pointCloudUrl,
+      autoFitOnLoad: true,
+    });
+
+    // Create toolbar
+    toolbarRef.current = new Toolbar(viewerRef.current);
+
+    // Create console
+    consoleRef.current = new PotreeViewerConsole(viewerRef.current, {
+      position: 'bottom-left',
+    });
+
+    // Cleanup
+    return () => {
+      consoleRef.current?.dispose();
+      toolbarRef.current?.dispose();
+      viewerRef.current?.dispose();
+    };
+  }, [pointCloudUrl]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: '100vh' }} />;
+}
+```
+
+### Vue 3
+
+```vue
+<template>
+  <div ref="container" style="width: 100%; height: 100vh"></div>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue';
+import { PotreeViewer, Toolbar, PotreeViewerConsole } from 'potree-viewer';
+
+const props = defineProps({
+  pointCloudUrl: String
 });
 
-// Clean up
-toolbar.dispose();
+const container = ref(null);
+let viewer = null;
+let toolbar = null;
+let viewerConsole = null;
+
+onMounted(() => {
+  viewer = new PotreeViewer({
+    container: container.value,
+    pointCloudUrl: props.pointCloudUrl,
+    autoFitOnLoad: true,
+  });
+
+  toolbar = new Toolbar(viewer);
+  viewerConsole = new PotreeViewerConsole(viewer);
+});
+
+onUnmounted(() => {
+  viewerConsole?.dispose();
+  toolbar?.dispose();
+  viewer?.dispose();
+});
+</script>
 ```
 
-### Toolbar Controls
+### Vanilla JavaScript
 
-- **Navigate** - Return to normal navigation mode
-- **Fit** - Fit point cloud to screen
-- **Distance** - Start distance measurement (click points to measure)
-- **Height** - Start height measurement (click 2 points for vertical difference)
-- **Clear** - Clear all measurements
-- **Top/Front/Right/Iso** - Switch to predefined views
+```javascript
+import { PotreeViewer, Toolbar, PotreeViewerConsole } from 'potree-viewer';
 
-### Measurement Workflow
+const viewer = new PotreeViewer({
+  container: document.getElementById('viewer'),
+  pointCloudUrl: 'cloud/metadata.json',
+  autoFitOnLoad: true,
+});
 
-1. Click a measurement button (Distance or Height)
-2. Click on the point cloud to add points
-3. For distance: click multiple points, press **Enter** to finish
-4. For height: click 2 points (auto-finishes)
-5. Press **ESC** to cancel
-6. Measurement result displays in the toolbar
+const toolbar = new Toolbar(viewer, {
+  alignment: 'top-right'
+});
 
-## Browser Compatibility
+const console = new PotreeViewerConsole(viewer, {
+  position: 'bottom-left',
+  visible: true
+});
 
-- Modern browsers with WebGL support (Chrome, Firefox, Edge, Safari)
-- Requires ES module support
-- No IE11 support
+// Custom button interactions
+document.getElementById('measure-distance').addEventListener('click', () => {
+  viewer.setMeasurementMode('distance');
+});
 
-## Point Cloud Data Preparation
+document.getElementById('view-top').addEventListener('click', () => {
+  viewer.setNamedView('top');
+});
 
-Use [PotreeConverter](https://github.com/potree/PotreeConverter/releases) to prepare your point cloud data:
-
-```bash
-./PotreeConverter input.laz -o output_directory
+// Listen to measurement results
+viewer.on('measurement-finished', (measurement) => {
+  console.log('Measurement result:', measurement.result);
+});
 ```
 
-Supported input formats: LAS, LAZ, PLY, PTX, XYZ (via TXT2LAS)
+## Advanced Usage
 
-## Examples
+### Custom Toolbar Buttons
+
+```javascript
+const toolbar = new Toolbar(viewer, {
+  alignment: 'top-right',
+  buttons: [
+    {
+      id: 'custom-action',
+      group: 'custom',
+      label: 'My Custom Action',
+      icon: '<svg>...</svg>',
+      action: () => {
+        console.log('Custom action clicked');
+      }
+    },
+    // ... include default buttons if needed
+  ]
+});
+```
+
+### Direct Three.js Scene Access
+
+```javascript
+const scene = viewer.getScene();
+const camera = viewer.getCamera();
+const renderer = viewer.getRenderer();
+
+// Add custom 3D objects
+const geometry = new THREE.BoxGeometry(1, 1, 1);
+const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+const cube = new THREE.Mesh(geometry, material);
+scene.add(cube);
+```
 
 ### Load Multiple Point Clouds
 
@@ -386,64 +673,113 @@ const viewer = new PotreeViewer({
 });
 ```
 
-### React Integration
+## Point Cloud Data Preparation
 
-```jsx
-import { useEffect, useRef } from 'react';
-import { PotreeViewer, Toolbar } from './viewer-lib/src/index.js';
+Use [PotreeConverter](https://github.com/potree/PotreeConverter/releases) to prepare your point cloud data:
 
-function PointCloudViewer({ pointCloudUrl }) {
-  const containerRef = useRef();
-  const viewerRef = useRef();
-  const toolbarRef = useRef();
+```bash
+./PotreeConverter input.laz -o output_directory
+```
 
-  useEffect(() => {
-    // Initialize viewer
-    viewerRef.current = new PotreeViewer({
-      container: containerRef.current,
-      pointCloudUrl,
-      autoFitOnLoad: true,
-    });
+**Supported input formats:** LAS, LAZ, PLY, PTX, XYZ (via TXT2LAS)
 
-    // Create toolbar
-    toolbarRef.current = new Toolbar(viewerRef.current);
+The converter will generate:
+- `metadata.json` - Point cloud metadata
+- `octree.bin` - Octree structure
+- `hierarchy.bin` - Hierarchy data
+- Individual node files
 
-    // Cleanup
-    return () => {
-      toolbarRef.current?.dispose();
-      viewerRef.current?.dispose();
-    };
-  }, [pointCloudUrl]);
+## Browser Compatibility
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100vh' }} />;
+- Modern browsers with WebGL support (Chrome, Firefox, Edge, Safari)
+- Requires ES module support
+- No IE11 support
+
+## Development
+
+### Running the Demo
+
+```bash
+cd viewer-lib
+npm install
+npm run dev
+```
+
+Demo will open at `http://localhost:3000/demo.html`
+
+### Building for Production
+
+```bash
+npm run build
+```
+
+### Project Structure
+
+```
+viewer-lib/
+├── src/
+│   ├── index.js                  # Main exports
+│   ├── PotreeViewer.js           # Main viewer class
+│   ├── utils/
+│   │   ├── EventEmitter.js       # Event system
+│   │   ├── config.js             # Configuration
+│   │   └── TextSprite.js         # Text labels
+│   ├── measurements/
+│   │   ├── Measurement.js        # Base class
+│   │   ├── DistanceMeasurement.js
+│   │   ├── HeightMeasurement.js
+│   │   ├── AngleMeasurement.js
+│   │   ├── RadiusMeasurement.js
+│   │   ├── VolumeMeasurement.js
+│   │   └── MeasurementManager.js
+│   └── ui/
+│       ├── Toolbar.js            # UI toolbar component
+│       └── PotreeViewerConsole.js # Console component
+├── demo.html                     # Demo page
+├── package.json
+├── vite.config.js
+└── README.md
+```
+
+## Troubleshooting
+
+### "Cannot find module 'three'"
+
+```bash
+cd viewer-lib
+npm install three potree-core
+```
+
+### Point cloud not loading
+
+- Check the path to `metadata.json` is correct
+- Open browser console for detailed error messages
+- Ensure server is serving point cloud files correctly
+- Verify CORS headers if loading from different origin
+
+### Webpack/Bundler issues
+
+Add to your bundler configuration:
+
+```javascript
+resolve: {
+  extensions: ['.js', '.json'],
+  alias: {
+    'three': path.resolve(__dirname, 'node_modules/three'),
+  }
 }
 ```
 
-## Comparison with Original Potree
+## Publishing
 
-### What's Different
+To publish this package to npm, see [PUBLISHING.md](./PUBLISHING.md) for detailed instructions.
 
-- ✅ Modern ES modules instead of global scripts
-- ✅ No jQuery dependency
-- ✅ Encapsulated API instead of global `window.viewer`
-- ✅ Framework-agnostic design
-- ✅ Built on potree-core (lightweight)
-- ❌ No full GUI sidebar (intentional - use Toolbar or build your own)
-- ❌ No EDL shading (not supported by potree-core)
-- ⏳ Limited measurement types (distance and height only for now)
-
-### When to Use This Library
-
-- Building modern web applications (React, Vue, etc.)
-- Need clean API and encapsulation
-- Want minimal UI with custom controls
-- Prefer lightweight bundle size
-
-### When to Use Original Potree
-
-- Need full-featured GUI out of the box
-- Require EDL shading
-- Need advanced features (classification, clipping, annotations)
+Quick publish:
+```bash
+cd viewer-lib
+npm login
+npm publish
+```
 
 ## License
 
@@ -454,3 +790,4 @@ MIT
 - Based on [potree-core](https://github.com/tentone/potree-core) by tentone
 - Original [Potree](https://github.com/potree/potree) by Markus Schütz
 - Built with [Three.js](https://threejs.org/)
+- Icons from [Lucide](https://lucide.dev/) (MIT License)

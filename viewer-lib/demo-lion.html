@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="hr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PotreeViewer Demo</title>
+  <title>PotreeViewer Demo - Lion Takanawa</title>
   <style>
     * {
       margin: 0;
@@ -33,12 +33,12 @@
     const viewer = new PotreeViewer({
       container: document.getElementById('container'),
       pointCloudUrl: '/7_1/metadata.json',
-      pointCloudName: '7_1',
-      description: 'Hrvatski šumarski institut: 7_1cm_laz.laz',
-      language: 'hr',
+      pointCloudName: '7_1 Test',
+      description: 'Test with 7_1 point cloud',
+      language: 'en',
       pointBudget: 1_000_000,
       fov: 80,
-      initialView: 'right',
+      initialView: 'front',
       material: {
         size: 0.6,
         minSize: 0.4,
@@ -73,7 +73,7 @@
       width: '360px',
       collapsed: false,
       showTimestamp: true,
-      visible: true  // Set to false to hide initially
+      visible: true
     });
 
     // Example: Toggle console visibility with keyboard shortcut (Ctrl+`)

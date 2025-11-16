@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { Potree } from 'potree-core';
 import { DistanceMeasurement } from './DistanceMeasurement.js';
 import { HeightMeasurement } from './HeightMeasurement.js';
+import { AngleMeasurement } from './AngleMeasurement.js';
+import { RadiusMeasurement } from './RadiusMeasurement.js';
+import { VolumeMeasurement } from './VolumeMeasurement.js';
 
 /**
  * Manages measurements for PotreeViewer
@@ -12,18 +15,23 @@ export class MeasurementManager {
     this.measurements = [];
     this.currentMeasurement = null;
     this.mode = 'none'; // 'none' | 'distance' | 'height' | 'area' | 'volume'
+    this.mouseDownPos = null; // Track mouse position on mousedown
+    this.dragThreshold = 5; // pixels - clicks that move more than this are considered drags
+    this.isRightMouseDown = false; // Track right mouse button for camera rotation
 
     // Bind event handlers
-    this._boundClickHandler = this._handleClick.bind(this);
+    this._boundMouseDownHandler = this._handleMouseDown.bind(this);
+    this._boundMouseUpHandler = this._handleMouseUp.bind(this);
+    this._boundMouseMoveHandler = this._handleMouseMove.bind(this);
     this._boundKeyHandler = this._handleKey.bind(this);
   }
 
   /**
    * Set measurement mode
-   * @param {string} mode - Measurement mode ('none', 'distance', 'height', 'area', 'volume')
+   * @param {string} mode - Measurement mode ('none', 'distance', 'height', 'angle', 'radius', 'volume')
    */
   setMode(mode) {
-    const validModes = ['none', 'distance', 'height', 'area', 'volume'];
+    const validModes = ['none', 'distance', 'height', 'angle', 'radius', 'volume'];
     if (!validModes.includes(mode)) {
       throw new Error(`Invalid measurement mode: ${mode}. Must be one of: ${validModes.join(', ')}`);
     }
@@ -44,16 +52,11 @@ export class MeasurementManager {
         this._addEventListeners();
       }
 
-      // Start new measurement
-      if (mode === 'area' || mode === 'volume') {
-        console.warn(`Measurement mode '${mode}' is not yet implemented`);
-        this.mode = 'none';
-        this._removeEventListeners();
-        return;
-      }
-
       this._startMeasurement(mode);
     }
+
+    // Emit mode change event
+    this.viewer.emit('measurement-mode-changed', mode);
   }
 
   /**
@@ -78,6 +81,15 @@ export class MeasurementManager {
         break;
       case 'height':
         measurement = new HeightMeasurement();
+        break;
+      case 'angle':
+        measurement = new AngleMeasurement();
+        break;
+      case 'radius':
+        measurement = new RadiusMeasurement();
+        break;
+      case 'volume':
+        measurement = new VolumeMeasurement();
         break;
       default:
         throw new Error(`Unsupported measurement type: ${type}`);
@@ -146,6 +158,11 @@ export class MeasurementManager {
     this.measurements = [];
     this.currentMeasurement = null;
     this.viewer.emit('measurement-cleared');
+
+    // If we're still in measurement mode, start a new measurement
+    if (this.mode !== 'none') {
+      this._startMeasurement(this.mode);
+    }
   }
 
   /**
@@ -171,8 +188,14 @@ export class MeasurementManager {
    */
   _addEventListeners() {
     const canvas = this.viewer.renderer.domElement;
-    canvas.addEventListener('click', this._boundClickHandler);
+    canvas.addEventListener('mousedown', this._boundMouseDownHandler, { capture: true });
+    canvas.addEventListener('mouseup', this._boundMouseUpHandler, { capture: true });
+    canvas.addEventListener('mousemove', this._boundMouseMoveHandler, { capture: true });
     window.addEventListener('keydown', this._boundKeyHandler);
+
+    // Keep OrbitControls enabled but we'll intercept left clicks
+    // Right mouse button will still allow camera rotation
+    // This is better UX than disabling controls entirely
   }
 
   /**
@@ -181,19 +204,93 @@ export class MeasurementManager {
    */
   _removeEventListeners() {
     const canvas = this.viewer.renderer.domElement;
-    canvas.removeEventListener('click', this._boundClickHandler);
+    canvas.removeEventListener('mousedown', this._boundMouseDownHandler, { capture: true });
+    canvas.removeEventListener('mouseup', this._boundMouseUpHandler, { capture: true });
+    canvas.removeEventListener('mousemove', this._boundMouseMoveHandler, { capture: true });
     window.removeEventListener('keydown', this._boundKeyHandler);
+
+    // Restore default cursor
+    const canvasEl = this.viewer.renderer.domElement;
+    canvasEl.style.cursor = '';
   }
 
   /**
-   * Handle click events
+   * Handle mouse down events
    * @private
    */
-  _handleClick(event) {
+  _handleMouseDown(event) {
     if (this.mode === 'none' || !this.currentMeasurement) return;
 
-    // Prevent orbit controls from interfering
+    // Track right mouse button for camera rotation
+    if (event.button === 2) {
+      this.isRightMouseDown = true;
+      return; // Let OrbitControls handle it
+    }
+
+    // Only handle left mouse button for measurements
+    if (event.button !== 0) return;
+
+    // Store mouse position to detect drag vs click
+    this.mouseDownPos = { x: event.clientX, y: event.clientY };
+
     event.stopPropagation();
+    event.preventDefault();
+  }
+
+  /**
+   * Handle mouse move events
+   * @private
+   */
+  _handleMouseMove(event) {
+    if (this.mode === 'none') return;
+
+    // Update cursor based on what's happening
+    const canvas = this.viewer.renderer.domElement;
+
+    if (this.isRightMouseDown) {
+      // Right mouse is down - show grab cursor for rotation
+      canvas.style.cursor = 'grabbing';
+    } else {
+      // Show crosshair for measurement mode
+      canvas.style.cursor = 'crosshair';
+    }
+  }
+
+  /**
+   * Handle mouse up events
+   * @private
+   */
+  _handleMouseUp(event) {
+    if (this.mode === 'none' || !this.currentMeasurement) return;
+
+    // Track right mouse button release
+    if (event.button === 2) {
+      this.isRightMouseDown = false;
+      const canvas = this.viewer.renderer.domElement;
+      canvas.style.cursor = 'crosshair';
+      return; // Let OrbitControls handle it
+    }
+
+    // Only handle left mouse button for measurements
+    if (event.button !== 0) return;
+
+    // Check if this was a drag or a click
+    if (this.mouseDownPos) {
+      const dx = Math.abs(event.clientX - this.mouseDownPos.x);
+      const dy = Math.abs(event.clientY - this.mouseDownPos.y);
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // If mouse moved more than threshold, it's a drag - ignore it
+      if (distance > this.dragThreshold) {
+        this.mouseDownPos = null;
+        return;
+      }
+    }
+
+    this.mouseDownPos = null;
+
+    event.stopPropagation();
+    event.preventDefault();
 
     // Get mouse coordinates
     const canvas = this.viewer.renderer.domElement;
@@ -216,14 +313,21 @@ export class MeasurementManager {
     );
 
     if (pickPoint) {
+      console.log(`Picked point at: ${pickPoint.position.toArray().map(v => v.toFixed(2)).join(', ')}`);
+
+      // Store old point count
+      const oldPointCount = this.currentMeasurement.points.length;
+
       // Add point to measurement
       this.currentMeasurement.addPoint(pickPoint.position);
 
-      // Update visuals
-      this.currentMeasurement.createVisuals(this.viewer.scene);
+      // Only update visuals if a new point was actually added
+      if (this.currentMeasurement.points.length > oldPointCount) {
+        this.currentMeasurement.createVisuals(this.viewer.scene);
 
-      // Emit update event
-      this.viewer.emit('measurement-updated', this.currentMeasurement.getSummary());
+        // Emit update event
+        this.viewer.emit('measurement-updated', this.currentMeasurement.getSummary());
+      }
 
       // Check if measurement is finished
       if (this.currentMeasurement.finished) {
@@ -232,6 +336,8 @@ export class MeasurementManager {
         // Start a new measurement of the same type
         this._startMeasurement(this.mode);
       }
+    } else {
+      console.log('No point picked - try clicking directly on the point cloud');
     }
   }
 

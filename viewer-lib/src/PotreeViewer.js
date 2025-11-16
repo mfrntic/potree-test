@@ -154,6 +154,11 @@ export class PotreeViewer extends EventEmitter {
       this.potree.updatePointClouds(this.pointClouds, this.camera, this.renderer);
     }
 
+    // Update measurement marker scales based on camera distance
+    if (this.measurementManager && this.camera) {
+      this._updateMeasurementScales();
+    }
+
     // Render scene
     if (this.renderer && this.scene && this.camera) {
       this.renderer.render(this.scene, this.camera);
@@ -174,6 +179,40 @@ export class PotreeViewer extends EventEmitter {
     this.camera.updateProjectionMatrix();
 
     this.renderer.setSize(width, height);
+
+    // Update Line2 materials resolution for all measurements
+    if (this.measurementManager) {
+      this._updateMeasurementResolutions(width, height);
+    }
+  }
+
+  /**
+   * Update Line2 material resolutions for measurements
+   * @private
+   */
+  _updateMeasurementResolutions(width, height) {
+    // Traverse scene to find all Line2 materials
+    this.scene.traverse((object) => {
+      if (object.material && object.material.resolution) {
+        object.material.resolution.set(width, height);
+      }
+    });
+  }
+
+  /**
+   * Update measurement marker scales based on camera distance
+   * @private
+   */
+  _updateMeasurementScales() {
+    const measurements = this.measurementManager.measurements;
+    for (const measurement of measurements) {
+      measurement.updateMarkerScales(this.camera);
+    }
+
+    // Also update current measurement if it exists
+    if (this.measurementManager.currentMeasurement) {
+      this.measurementManager.currentMeasurement.updateMarkerScales(this.camera);
+    }
   }
 
   /**
@@ -452,7 +491,8 @@ export class PotreeViewer extends EventEmitter {
 
   /**
    * Set named view (predefined camera positions)
-   * @param {string} viewName - 'top' | 'front' | 'right' | 'isometric'
+   * NOTE: Y is UP in our coordinate system (point cloud is rotated -90° around X)
+   * @param {string} viewName - 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right'
    */
   setNamedView(viewName) {
     if (this.pointClouds.length === 0) {
@@ -463,36 +503,50 @@ export class PotreeViewer extends EventEmitter {
     const pco = this.pointClouds[0];
     const { center, size } = this._getPointCloudWorldBounds(pco);
     const maxDim = Math.max(size.x, size.y, size.z);
-    const distance = maxDim * 1.5; // Closer view
+    const distance = maxDim * 1.5;
 
     let position;
 
     switch (viewName.toLowerCase()) {
       case 'top':
-        // Look from above (Y+ is up after rotation)
+        // Look from above (Y+ is up)
         position = new THREE.Vector3(center.x, center.y + distance, center.z);
         break;
+
+      case 'bottom':
+        // Look from below
+        position = new THREE.Vector3(center.x, center.y - distance, center.z);
+        break;
+
       case 'front':
-        // Look from front (-Z direction after rotation)
-        position = new THREE.Vector3(center.x, center.y + maxDim * 0.2, center.z - distance);
+        // Look from front (negative Z)
+        position = new THREE.Vector3(center.x, center.y, center.z - distance);
         break;
+
+      case 'back':
+        // Look from back (positive Z)
+        position = new THREE.Vector3(center.x, center.y, center.z + distance);
+        break;
+
+      case 'left':
+        // Look from left (negative X)
+        position = new THREE.Vector3(center.x - distance, center.y, center.z);
+        break;
+
       case 'right':
-        // Look from right side with slight elevation
-        // After rotation: X is still right, Y is up, Z is forward
-        position = new THREE.Vector3(
-          center.x + distance,
-          center.y + maxDim * 0.3,
-          center.z - distance * 0.3
-        );
+        // Look from right (positive X)
+        position = new THREE.Vector3(center.x + distance, center.y, center.z);
         break;
+
       case 'isometric':
-        // Isometric view from corner
+        // Isometric view from corner (for backward compatibility)
         position = new THREE.Vector3(
           center.x + distance * 0.7,
           center.y + distance * 0.7,
           center.z - distance * 0.7
         );
         break;
+
       default:
         console.warn(`Unknown view name: ${viewName}`);
         return;

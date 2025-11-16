@@ -1,9 +1,14 @@
 import * as THREE from 'three';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { Measurement } from './Measurement.js';
+import { TextSprite } from '../utils/TextSprite.js';
 
 /**
  * Height measurement
- * Measures vertical (Z) difference between two points
+ * Measures vertical (Y) difference between two points
+ * NOTE: Y axis is up in our coordinate system (point cloud is rotated)
  */
 export class HeightMeasurement extends Measurement {
   constructor(id) {
@@ -38,23 +43,27 @@ export class HeightMeasurement extends Measurement {
   }
 
   /**
-   * Get the measurement result
+   * Get the measurement result (cached to prevent jitter)
    */
   getResult() {
-    if (this.points.length < 2) {
-      return { deltaZ: 0, distance3D: 0 };
-    }
+    return this._getCachedResult(() => {
+      if (this.points.length < 2) {
+        return { deltaY: 0, height: 0, distance3D: 0 };
+      }
 
-    const p1 = this.points[0];
-    const p2 = this.points[1];
+      const p1 = this.points[0];
+      const p2 = this.points[1];
 
-    const deltaZ = Math.abs(p2.z - p1.z);
-    const distance3D = p1.distanceTo(p2);
+      // Y is up in our coordinate system (after point cloud rotation)
+      const deltaY = Math.abs(p2.y - p1.y);
+      const distance3D = p1.distanceTo(p2);
 
-    return {
-      deltaZ,
-      distance3D,
-    };
+      return {
+        deltaY,       // Vertical difference (height)
+        height: deltaY, // Alias for clarity
+        distance3D,   // 3D distance between points
+      };
+    });
   }
 
   /**
@@ -68,7 +77,7 @@ export class HeightMeasurement extends Measurement {
     if (this.points.length === 0) return;
 
     // Create sphere markers for each point
-    const markerGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+    const markerGeometry = new THREE.SphereGeometry(0.03, 16, 16);
     const markerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
 
     for (const point of this.points) {
@@ -83,36 +92,67 @@ export class HeightMeasurement extends Measurement {
       const p1 = this.points[0];
       const p2 = this.points[1];
 
-      // Create vertical line from p1 to p2 (projected vertically)
-      const verticalPoints = [
-        new THREE.Vector3(p1.x, p1.y, p1.z),
-        new THREE.Vector3(p1.x, p1.y, p2.z)
-      ];
+      // Create vertical line (along Y axis - up direction) using Line2 for proper thickness
+      const verticalStart = new THREE.Vector3(p1.x, p1.y, p1.z);
+      const verticalEnd = new THREE.Vector3(p1.x, p2.y, p1.z);
 
-      const lineGeometry = new THREE.BufferGeometry().setFromPoints(verticalPoints);
-      const lineMaterial = new THREE.LineBasicMaterial({
+      const lineGeometry = new LineGeometry();
+      lineGeometry.setPositions([
+        verticalStart.x, verticalStart.y, verticalStart.z,
+        verticalEnd.x, verticalEnd.y, verticalEnd.z
+      ]);
+
+      const lineMaterial = new LineMaterial({
         color: 0x00ff00,
-        linewidth: 2,
-        dashSize: 0.1,
-        gapSize: 0.05,
+        linewidth: 3, // in pixels
+        transparent: true,
+        opacity: 0.9,
       });
-      lineMaterial.transparent = true;
-      lineMaterial.opacity = 0.8;
 
-      this.lines = new THREE.Line(lineGeometry, lineMaterial);
+      // Important: LineMaterial needs resolution for proper rendering
+      lineMaterial.resolution.set(window.innerWidth, window.innerHeight);
+
+      this.lines = new Line2(lineGeometry, lineMaterial);
       scene.add(this.lines);
 
-      // Also draw connection line between actual points
-      const connectionGeometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-      const connectionMaterial = new THREE.LineBasicMaterial({
-        color: 0x00ff00,
-        linewidth: 1,
+      // Also draw connection line between actual points (thinner, dashed look)
+      const connectionGeometry = new LineGeometry();
+      connectionGeometry.setPositions([
+        p1.x, p1.y, p1.z,
+        p2.x, p2.y, p2.z
+      ]);
+
+      const connectionMaterial = new LineMaterial({
+        color: 0xff0000, // Red for 3D distance
+        linewidth: 2,
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.6,
+        dashed: true,
+        dashSize: 0.3,
+        gapSize: 0.15,
       });
-      const connectionLine = new THREE.Line(connectionGeometry, connectionMaterial);
+      connectionMaterial.resolution.set(window.innerWidth, window.innerHeight);
+
+      const connectionLine = new Line2(connectionGeometry, connectionMaterial);
       scene.add(connectionLine);
       this.labels.push(connectionLine); // Store in labels array for cleanup
+
+      // Add text label showing the height
+      const result = this.getResult();
+      const label = new TextSprite(`${result.height.toFixed(2)} m`);
+
+      // Position label at midpoint of vertical line
+      label.position.set(
+        p1.x,
+        (p1.y + p2.y) / 2,
+        p1.z
+      );
+
+      // Fixed scale for consistent size
+      label.scale.multiplyScalar(0.5);
+
+      scene.add(label);
+      this.labels.push(label);
     }
   }
 }

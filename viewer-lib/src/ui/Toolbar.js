@@ -1,6 +1,6 @@
 /**
- * Minimal toolbar UI for PotreeViewer
- * Provides basic controls for navigation, measurements, and views
+ * Configurable toolbar UI for PotreeViewer
+ * Provides controls for navigation, measurements, and views
  */
 export class Toolbar {
   constructor(viewer, options = {}) {
@@ -8,11 +8,31 @@ export class Toolbar {
     this.container = null;
     this.currentMeasurement = null;
 
+    // Default button groups
+    const defaultButtons = [
+      // General controls
+      { id: 'fit', group: 'general', label: 'Fit to Screen', icon: '⊡', action: () => this.viewer.fitToScreen() },
+      { id: 'clear', group: 'general', label: 'Clear Measurements', icon: '🗑', action: () => this._clearMeasurements() },
+
+      // Measurements
+      { id: 'distance', group: 'measurement', label: 'Distance', icon: '📏', action: () => this._setMeasurementMode('distance') },
+      { id: 'height', group: 'measurement', label: 'Height', icon: '↕', action: () => this._setMeasurementMode('height') },
+      { id: 'angle', group: 'measurement', label: 'Angle', icon: '∠', action: () => this._setMeasurementMode('angle') },
+      { id: 'radius', group: 'measurement', label: 'Radius', icon: '⊙', action: () => this._setMeasurementMode('radius') },
+      { id: 'volume', group: 'measurement', label: 'Volume', icon: '⊚', action: () => this._setMeasurementMode('volume') },
+
+      // Views
+      { id: 'view-left', group: 'view', label: 'Left View', icon: '←', action: () => this.viewer.setNamedView('left') },
+      { id: 'view-right', group: 'view', label: 'Right View', icon: '→', action: () => this.viewer.setNamedView('right') },
+      { id: 'view-front', group: 'view', label: 'Front View', icon: '↓', action: () => this.viewer.setNamedView('front') },
+      { id: 'view-back', group: 'view', label: 'Back View', icon: '↑', action: () => this.viewer.setNamedView('back') },
+      { id: 'view-top', group: 'view', label: 'Top View', icon: '⊤', action: () => this.viewer.setNamedView('top') },
+      { id: 'view-bottom', group: 'view', label: 'Bottom View', icon: '⊥', action: () => this.viewer.setNamedView('bottom') },
+    ];
+
     this.options = {
-      position: options.position || 'top', // 'top' | 'bottom' | 'left' | 'right'
-      showMeasurements: options.showMeasurements !== false,
-      showViews: options.showViews !== false,
-      showControls: options.showControls !== false,
+      alignment: options.alignment || 'top-right', // 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'left' | 'right' | 'top' | 'bottom'
+      buttons: options.buttons || defaultButtons,
       ...options
     };
 
@@ -30,33 +50,20 @@ export class Toolbar {
     this.container.className = 'potree-toolbar';
     this.container.style.cssText = this._getContainerStyles();
 
-    // Add sections
-    if (this.options.showControls) {
-      this.container.appendChild(this._createControlsSection());
+    // Group buttons by their group property
+    const buttonGroups = {};
+    for (const btn of this.options.buttons) {
+      if (!buttonGroups[btn.group]) {
+        buttonGroups[btn.group] = [];
+      }
+      buttonGroups[btn.group].push(btn);
     }
 
-    if (this.options.showMeasurements) {
-      this.container.appendChild(this._createMeasurementsSection());
+    // Create button groups
+    for (const [groupName, buttons] of Object.entries(buttonGroups)) {
+      const groupContainer = this._createButtonGroup(buttons);
+      this.container.appendChild(groupContainer);
     }
-
-    if (this.options.showViews) {
-      this.container.appendChild(this._createViewsSection());
-    }
-
-    // Add measurement info display
-    this.measurementInfo = document.createElement('div');
-    this.measurementInfo.className = 'potree-measurement-info';
-    this.measurementInfo.style.cssText = `
-      padding: 8px 12px;
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      border-radius: 4px;
-      font-family: monospace;
-      font-size: 12px;
-      display: none;
-      margin-left: auto;
-    `;
-    this.container.appendChild(this.measurementInfo);
 
     // Inject styles
     this._injectStyles();
@@ -66,7 +73,7 @@ export class Toolbar {
   }
 
   /**
-   * Get container styles based on position
+   * Get container styles based on alignment
    * @private
    */
   _getContainerStyles() {
@@ -74,150 +81,107 @@ export class Toolbar {
       position: absolute;
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px;
-      background: rgba(255, 255, 255, 0.95);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      gap: 12px;
+      padding: 12px;
       z-index: 1000;
       user-select: none;
+      pointer-events: auto;
     `;
 
-    switch (this.options.position) {
-      case 'top':
-        return baseStyles + 'top: 0; left: 0; right: 0; flex-direction: row;';
-      case 'bottom':
-        return baseStyles + 'bottom: 0; left: 0; right: 0; flex-direction: row;';
-      case 'left':
-        return baseStyles + 'left: 0; top: 0; bottom: 0; flex-direction: column;';
-      case 'right':
-        return baseStyles + 'right: 0; top: 0; bottom: 0; flex-direction: column;';
-      default:
-        return baseStyles + 'top: 0; left: 0; right: 0; flex-direction: row;';
-    }
+    const alignmentMap = {
+      'top-left': 'top: 12px; left: 12px; flex-direction: row;',
+      'top-right': 'top: 12px; right: 12px; flex-direction: row;',
+      'bottom-left': 'bottom: 12px; left: 12px; flex-direction: row;',
+      'bottom-right': 'bottom: 12px; right: 12px; flex-direction: row;',
+      'left': 'left: 12px; top: 50%; transform: translateY(-50%); flex-direction: column;',
+      'right': 'right: 12px; top: 50%; transform: translateY(-50%); flex-direction: column;',
+      'top': 'top: 12px; left: 50%; transform: translateX(-50%); flex-direction: row;',
+      'bottom': 'bottom: 12px; left: 50%; transform: translateX(-50%); flex-direction: row;',
+    };
+
+    return baseStyles + (alignmentMap[this.options.alignment] || alignmentMap['top-right']);
   }
 
   /**
-   * Create controls section
+   * Create a button group
    * @private
    */
-  _createControlsSection() {
-    const section = this._createSection('Controls');
-
-    // Navigate button
-    const navigateBtn = this._createButton('Navigate', () => {
-      this.viewer.setMeasurementMode('none');
-      this._setActiveButton(navigateBtn);
-    });
-    navigateBtn.classList.add('active');
-    section.appendChild(navigateBtn);
-
-    // Fit to screen button
-    const fitBtn = this._createButton('Fit', () => {
-      this.viewer.fitToScreen();
-    });
-    section.appendChild(fitBtn);
-
-    return section;
-  }
-
-  /**
-   * Create measurements section
-   * @private
-   */
-  _createMeasurementsSection() {
-    const section = this._createSection('Measurements');
-
-    // Distance button
-    const distanceBtn = this._createButton('Distance', () => {
-      this.viewer.setMeasurementMode('distance');
-      this._setActiveButton(distanceBtn);
-    });
-    section.appendChild(distanceBtn);
-
-    // Height button
-    const heightBtn = this._createButton('Height', () => {
-      this.viewer.setMeasurementMode('height');
-      this._setActiveButton(heightBtn);
-    });
-    section.appendChild(heightBtn);
-
-    // Clear measurements button
-    const clearBtn = this._createButton('Clear', () => {
-      this.viewer.clearMeasurements();
-      this.measurementInfo.style.display = 'none';
-    });
-    clearBtn.style.marginLeft = '8px';
-    section.appendChild(clearBtn);
-
-    return section;
-  }
-
-  /**
-   * Create views section
-   * @private
-   */
-  _createViewsSection() {
-    const section = this._createSection('Views');
-
-    const views = [
-      { name: 'Top', value: 'top' },
-      { name: 'Front', value: 'front' },
-      { name: 'Right', value: 'right' },
-      { name: 'Iso', value: 'isometric' },
-    ];
-
-    for (const view of views) {
-      const btn = this._createButton(view.name, () => {
-        this.viewer.setNamedView(view.value);
-      });
-      section.appendChild(btn);
-    }
-
-    return section;
-  }
-
-  /**
-   * Create a section container
-   * @private
-   */
-  _createSection(title) {
-    const section = document.createElement('div');
-    section.className = 'potree-toolbar-section';
-    section.style.cssText = `
+  _createButtonGroup(buttons) {
+    const group = document.createElement('div');
+    group.className = 'potree-toolbar-group';
+    group.style.cssText = `
       display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 0 8px;
-      border-right: 1px solid #ddd;
+      gap: 6px;
+      flex-wrap: wrap;
     `;
-    return section;
+
+    for (const btnConfig of buttons) {
+      const btn = this._createButton(btnConfig);
+      group.appendChild(btn);
+    }
+
+    return group;
   }
 
   /**
-   * Create a button
+   * Set measurement mode helper
    * @private
    */
-  _createButton(text, onClick) {
+  _setMeasurementMode(mode) {
+    this.viewer.setMeasurementMode(mode);
+
+    // Update active state for measurement buttons
+    const buttons = this.container.querySelectorAll('.potree-toolbar-button[data-mode]');
+    buttons.forEach(btn => {
+      if (btn.dataset.mode === mode) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  /**
+   * Clear all measurements
+   * @private
+   */
+  _clearMeasurements() {
+    this.viewer.clearMeasurements();
+
+    // Exit measurement mode completely
+    this.viewer.setMeasurementMode('none');
+
+    // Deactivate all measurement buttons
+    const buttons = this.container.querySelectorAll('.potree-toolbar-button[data-mode]');
+    buttons.forEach(btn => btn.classList.remove('active'));
+  }
+
+  /**
+   * Create a button from configuration
+   * @private
+   */
+  _createButton(config) {
     const button = document.createElement('button');
     button.className = 'potree-toolbar-button';
-    button.textContent = text;
-    button.onclick = onClick;
-    return button;
-  }
+    button.title = config.label; // Tooltip
 
-  /**
-   * Set active button (toggle active state)
-   * @private
-   */
-  _setActiveButton(activeButton) {
-    // Remove active class from all buttons
-    const buttons = this.container.querySelectorAll('.potree-toolbar-button');
-    buttons.forEach(btn => btn.classList.remove('active'));
+    // Add icon and label
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'potree-button-icon';
+    iconSpan.textContent = config.icon;
+    button.appendChild(iconSpan);
 
-    // Add active class to the clicked button
-    if (activeButton) {
-      activeButton.classList.add('active');
+    // Add data attribute for measurement modes
+    if (config.group === 'measurement') {
+      button.dataset.mode = config.id;
     }
+
+    button.onclick = (e) => {
+      e.stopPropagation();
+      config.action();
+    };
+
+    return button;
   }
 
   /**
@@ -225,36 +189,29 @@ export class Toolbar {
    * @private
    */
   _attachEventListeners() {
-    // Listen for measurement events
-    this.viewer.on('measurement-finished', (measurement) => {
-      this._displayMeasurementResult(measurement);
+    // Update button states when measurement mode changes
+    this.viewer.on('measurement-started', (measurement) => {
+      this._updateButtonStates(measurement.type);
     });
 
-    this.viewer.on('measurement-cleared', () => {
-      this.measurementInfo.style.display = 'none';
+    this.viewer.on('measurement-mode-changed', (mode) => {
+      this._updateButtonStates(mode);
     });
   }
 
   /**
-   * Display measurement result
+   * Update button active states
    * @private
    */
-  _displayMeasurementResult(measurement) {
-    let text = '';
-
-    if (measurement.type === 'distance' && measurement.result.distanceTotal) {
-      text = `Distance: ${measurement.result.distanceTotal.toFixed(2)} m`;
-    } else if (measurement.type === 'height' && measurement.result.deltaZ !== undefined) {
-      text = `Height (ΔZ): ${measurement.result.deltaZ.toFixed(2)} m`;
-      if (measurement.result.distance3D) {
-        text += ` | 3D Distance: ${measurement.result.distance3D.toFixed(2)} m`;
+  _updateButtonStates(activeMode) {
+    const buttons = this.container.querySelectorAll('.potree-toolbar-button[data-mode]');
+    buttons.forEach(btn => {
+      if (btn.dataset.mode === activeMode) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
       }
-    }
-
-    if (text) {
-      this.measurementInfo.textContent = text;
-      this.measurementInfo.style.display = 'block';
-    }
+    });
   }
 
   /**
@@ -267,35 +224,58 @@ export class Toolbar {
     const style = document.createElement('style');
     style.id = 'potree-toolbar-styles';
     style.textContent = `
+      .potree-toolbar {
+        background: transparent;
+        pointer-events: none;
+      }
+
+      .potree-toolbar-group {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 8px;
+        padding: 4px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+        pointer-events: auto;
+      }
+
       .potree-toolbar-button {
-        padding: 6px 12px;
-        border: 1px solid #ddd;
-        background: white;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border: none;
+        background: transparent;
         color: #333;
-        font-size: 13px;
+        font-size: 20px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         cursor: pointer;
-        border-radius: 4px;
+        border-radius: 6px;
         transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
       }
 
       .potree-toolbar-button:hover {
-        background: #f5f5f5;
-        border-color: #999;
+        background: rgba(0, 0, 0, 0.08);
       }
 
       .potree-toolbar-button:active {
-        background: #e0e0e0;
+        background: rgba(0, 0, 0, 0.15);
+        transform: scale(0.95);
       }
 
       .potree-toolbar-button.active {
         background: #007bff;
         color: white;
-        border-color: #0056b3;
       }
 
       .potree-toolbar-button.active:hover {
         background: #0056b3;
+      }
+
+      .potree-button-icon {
+        display: block;
+        line-height: 1;
       }
     `;
     document.head.appendChild(style);

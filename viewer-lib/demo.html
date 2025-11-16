@@ -71,9 +71,10 @@
     <h3>PotreeViewer Demo</h3>
     <p><strong>Controls:</strong></p>
     <p>• Use toolbar buttons to navigate and measure</p>
-    <p>• Click <code>Distance</code> or <code>Height</code> to start measuring</p>
+    <p>• <strong>Measurements:</strong> Distance, Height, Angle, Radius, Volume</p>
+    <p>• <strong>Views:</strong> Top, Bottom, Left, Right, Front, Back</p>
     <p>• Press <code>ESC</code> to cancel measurement</p>
-    <p>• Press <code>Enter</code> to finish measurement</p>
+    <p>• Press <code>Enter</code> to finish distance measurement</p>
     <p class="status" id="status">Initializing...</p>
   </div>
 
@@ -121,17 +122,46 @@
       }
     });
 
-    // Create toolbar
+    // Create toolbar with custom configuration
     const toolbar = new Toolbar(viewer, {
-      position: 'top',
-      showMeasurements: true,
-      showViews: true,
-      showControls: true,
+      alignment: 'top-right',
+      buttons: [
+        // General controls
+        { id: 'fit', group: 'general', label: 'Fit to Screen', icon: '⊡', action: () => viewer.fitToScreen() },
+        { id: 'clear', group: 'general', label: 'Clear All', icon: '🗑', action: () => viewer.clearMeasurements() },
+
+        // Measurements
+        { id: 'distance', group: 'measurement', label: 'Distance', icon: '📏', action: () => viewer.setMeasurementMode('distance') },
+        { id: 'height', group: 'measurement', label: 'Height', icon: '↕', action: () => viewer.setMeasurementMode('height') },
+        { id: 'angle', group: 'measurement', label: 'Angle', icon: '∠', action: () => viewer.setMeasurementMode('angle') },
+        { id: 'radius', group: 'measurement', label: 'Radius', icon: '⊙', action: () => viewer.setMeasurementMode('radius') },
+        { id: 'volume', group: 'measurement', label: 'Volume', icon: '⊚', action: () => viewer.setMeasurementMode('volume') },
+
+        // Views
+        { id: 'view-left', group: 'view', label: 'Left View', icon: '←', action: () => viewer.setNamedView('left') },
+        { id: 'view-right', group: 'view', label: 'Right View', icon: '→', action: () => viewer.setNamedView('right') },
+        { id: 'view-front', group: 'view', label: 'Front View', icon: '↓', action: () => viewer.setNamedView('front') },
+        { id: 'view-back', group: 'view', label: 'Back View', icon: '↑', action: () => viewer.setNamedView('back') },
+        { id: 'view-top', group: 'view', label: 'Top View', icon: '⊤', action: () => viewer.setNamedView('top') },
+        { id: 'view-bottom', group: 'view', label: 'Bottom View', icon: '⊥', action: () => viewer.setNamedView('bottom') },
+      ]
     });
 
     // Listen to measurement events
     viewer.on('measurement-started', (measurement) => {
       console.log('Measurement started:', measurement);
+      statusEl.textContent = `Measuring ${measurement.type}... (click points, ESC to cancel)`;
+      statusEl.style.color = '#007bff';
+    });
+
+    viewer.on('measurement-mode-changed', (mode) => {
+      if (mode === 'none') {
+        statusEl.textContent = 'Ready - Select a tool';
+        statusEl.style.color = '#28a745';
+      } else {
+        statusEl.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} mode active - Click to measure`;
+        statusEl.style.color = '#007bff';
+      }
     });
 
     viewer.on('measurement-updated', (measurement) => {
@@ -141,16 +171,44 @@
     viewer.on('measurement-finished', (measurement) => {
       console.log('Measurement finished:', measurement);
 
-      if (measurement.type === 'distance') {
-        console.log(`Total distance: ${measurement.result.distanceTotal.toFixed(2)} m`);
-      } else if (measurement.type === 'height') {
-        console.log(`Height (ΔZ): ${measurement.result.deltaZ.toFixed(2)} m`);
-        console.log(`3D Distance: ${measurement.result.distance3D.toFixed(2)} m`);
+      // Update status with measurement result
+      let resultText = '';
+
+      switch (measurement.type) {
+        case 'distance':
+          resultText = `Distance: ${measurement.result.distanceTotal.toFixed(2)} m`;
+          break;
+        case 'height':
+          resultText = `Height: ${measurement.result.height.toFixed(2)} m (3D: ${measurement.result.distance3D.toFixed(2)} m)`;
+          break;
+        case 'angle':
+          resultText = `Angle: ${measurement.result.angleDegrees.toFixed(1)}°`;
+          break;
+        case 'radius':
+          resultText = `Radius: ${measurement.result.radius.toFixed(2)} m | Circumference: ${measurement.result.circumference.toFixed(2)} m`;
+          break;
+        case 'volume':
+          resultText = `Volume: ${measurement.result.volume.toFixed(2)} m³ | Radius: ${measurement.result.radius.toFixed(2)} m`;
+          break;
+      }
+
+      if (resultText) {
+        statusEl.textContent = `✓ ${resultText}`;
+        statusEl.style.color = '#28a745';
       }
     });
 
     viewer.on('view-changed', (info) => {
       console.log('View changed:', info);
+    });
+
+    viewer.on('measurement-cleared', () => {
+      statusEl.textContent = 'All measurements cleared';
+      statusEl.style.color = '#6c757d';
+      setTimeout(() => {
+        statusEl.textContent = 'Ready - Select a tool';
+        statusEl.style.color = '#28a745';
+      }, 2000);
     });
 
     // Expose to window for debugging

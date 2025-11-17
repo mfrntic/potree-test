@@ -27,6 +27,16 @@ export class MeasurementManager {
   }
 
   /**
+   * Log message to console (if console exists)
+   * @private
+   */
+  _log(message, type = 'debug') {
+    if (this.viewer && this.viewer._console) {
+      this.viewer._console.log(message, type);
+    }
+  }
+
+  /**
    * Set measurement mode
    * @param {string} mode - Measurement mode ('none', 'distance', 'height', 'angle', 'radius', 'volume')
    */
@@ -36,8 +46,11 @@ export class MeasurementManager {
       throw new Error(`Invalid measurement mode: ${mode}. Must be one of: ${validModes.join(', ')}`);
     }
 
+    this._log(`Measurement mode: ${mode}`, 'info');
+
     // Finish current measurement if switching modes
     if (this.currentMeasurement && !this.currentMeasurement.finished) {
+      this._log('Finishing current measurement before mode change', 'debug');
       this.finishCurrentMeasurement();
     }
 
@@ -47,9 +60,11 @@ export class MeasurementManager {
     // Add/remove event listeners based on mode
     if (mode === 'none') {
       this._removeEventListeners();
+      this._log('Measurement event listeners removed', 'debug');
     } else {
       if (oldMode === 'none') {
         this._addEventListeners();
+        this._log('Measurement event listeners added', 'debug');
       }
 
       this._startMeasurement(mode);
@@ -152,12 +167,14 @@ export class MeasurementManager {
    * Clear all measurements
    */
   clearMeasurements() {
+    const count = this.measurements.length;
     for (const measurement of this.measurements) {
       measurement.clear(this.viewer.scene);
     }
     this.measurements = [];
     this.currentMeasurement = null;
     this.viewer.emit('measurement-cleared');
+    this._log(`Cleared ${count} measurement(s)`, 'info');
 
     // If we're still in measurement mode, start a new measurement
     if (this.mode !== 'none') {
@@ -319,7 +336,9 @@ export class MeasurementManager {
         position: pickPoint.position
       };
 
-      console.log(`Picked point at: ${point.position.toArray().map(v => v.toFixed(2)).join(', ')}`);
+      const coords = point.position.toArray().map(v => v.toFixed(2)).join(', ');
+      console.log(`Picked point at: ${coords}`);
+      this._log(`Point added: [${coords}]`, 'debug');
 
       // Store old point count
       const oldPointCount = this.currentMeasurement.points.length;
@@ -338,6 +357,7 @@ export class MeasurementManager {
 
       // Check if measurement is finished
       if (this.currentMeasurement.finished) {
+        this._log(`${this.mode} measurement complete`, 'info');
         this.finishCurrentMeasurement();
 
         // Start a new measurement of the same type
@@ -345,6 +365,7 @@ export class MeasurementManager {
       }
     } else {
       console.log('No point picked - try clicking directly on the point cloud');
+      this._log('No point picked - click on point cloud', 'warning');
     }
   }
 

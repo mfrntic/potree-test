@@ -19,7 +19,7 @@ $(function () {
     viewer.setDescription("Hrvatski šumarski institut: 7_1cm_laz.laz");
 
     viewer.loadGUI(() => {
-        viewer.setLanguage('hr');
+        viewer.setLanguage('en');
         $("#menu_tools").next().show();
         $("#menu_clipping").next().show();
         //viewer.toggleSidebar();

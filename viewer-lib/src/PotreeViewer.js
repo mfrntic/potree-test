@@ -34,11 +34,40 @@ export class PotreeViewer extends EventEmitter {
   }
 
   /**
+   * Get console reference for logging (will be set when console is created)
+   * @returns {PotreeViewerConsole|null}
+   */
+  getConsole() {
+    return this._console || null;
+  }
+
+  /**
+   * Set console reference (called by PotreeViewerConsole)
+   * @param {PotreeViewerConsole} consoleInstance
+   * @private
+   */
+  _setConsole(consoleInstance) {
+    this._console = consoleInstance;
+  }
+
+  /**
+   * Log message to console (if console exists)
+   * @private
+   */
+  _log(message, type = 'debug') {
+    if (this._console) {
+      this._console.log(message, type);
+    }
+  }
+
+  /**
    * Initialize Three.js scene, camera, renderer, and Potree instance
    * @private
    */
   _init() {
     try {
+      this._log('Initializing PotreeViewer...', 'debug');
+
       // Create Three.js scene
       this.scene = new THREE.Scene();
 
@@ -54,6 +83,7 @@ export class PotreeViewer extends EventEmitter {
         10000
       );
       this.camera.position.set(10, 10, 10);
+      this._log(`Camera created: FOV=${this.config.fov}°, aspect=${aspect.toFixed(2)}`, 'debug');
 
       // Create renderer
       this.renderer = new THREE.WebGLRenderer({
@@ -63,11 +93,13 @@ export class PotreeViewer extends EventEmitter {
       this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
       this.renderer.setPixelRatio(window.devicePixelRatio);
       this.container.appendChild(this.renderer.domElement);
+      this._log(`Renderer created: ${this.container.clientWidth}x${this.container.clientHeight}, pixelRatio=${window.devicePixelRatio}`, 'debug');
 
       // Create controls
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
       this.controls.enableDamping = true;
       this.controls.dampingFactor = 0.05;
+      this._log('OrbitControls initialized', 'debug');
 
       // Allow full rotation around vertical axis
       this.controls.minPolarAngle = 0; // Allow looking straight down
@@ -105,9 +137,11 @@ export class PotreeViewer extends EventEmitter {
       // Create Potree instance
       this.potree = new Potree();
       this.potree.pointBudget = this.config.pointBudget;
+      this._log(`Potree instance created: pointBudget=${this.config.pointBudget.toLocaleString()}`, 'debug');
 
       // Create measurement manager
       this.measurementManager = new MeasurementManager(this);
+      this._log('MeasurementManager initialized', 'debug');
 
       // Handle window resize
       this._boundResizeHandler = this._handleResize.bind(this);
@@ -115,15 +149,18 @@ export class PotreeViewer extends EventEmitter {
 
       // Start animation loop
       this._animate();
+      this._log('Animation loop started', 'debug');
 
       // Load point cloud if URL is provided
       if (this.config.pointCloudUrl) {
+        this._log(`Loading point cloud: ${this.config.pointCloudUrl}`, 'info');
         this.loadPointCloud(this.config.pointCloudUrl, this.config.pointCloudName)
           .then(() => {
             // Apply initial view
             this._applyInitialView();
 
             // Emit ready event
+            this._log('Viewer ready', 'info');
             this.emit('ready', this);
             if (typeof this.config.onReady === 'function') {
               this.config.onReady(this);
@@ -131,10 +168,12 @@ export class PotreeViewer extends EventEmitter {
           })
           .catch(error => {
             console.error('Failed to load point cloud in _init:', error);
+            this._log(`Failed to load point cloud: ${error.message}`, 'error');
             this._handleError(error);
           });
       } else {
         // No point cloud to load, emit ready immediately
+        this._log('Viewer ready (no point cloud specified)', 'info');
         this.emit('ready', this);
         if (typeof this.config.onReady === 'function') {
           this.config.onReady(this);
@@ -330,16 +369,21 @@ export class PotreeViewer extends EventEmitter {
     }
 
     try {
+      this._log(`Loading point cloud from: ${url}`, 'debug');
+
       // Extract base URL and filename
       const lastSlash = url.lastIndexOf('/');
       const baseUrl = lastSlash >= 0 ? url.substring(0, lastSlash + 1) : '';
       const filename = lastSlash >= 0 ? url.substring(lastSlash + 1) : url;
+
+      this._log(`Parsed URL - baseUrl: "${baseUrl}", filename: "${filename}"`, 'debug');
 
       // Load point cloud using potree-core API
       // The second parameter is the base URL string
       const pco = await this.potree.loadPointCloud(filename, baseUrl);
 
       pco.name = name;
+      this._log(`Point cloud loaded: "${name}"`, 'info');
 
       // Rotate point cloud to make Y-up (ground is XZ plane)
       pco.rotation.x = -Math.PI / 2;
@@ -380,12 +424,14 @@ export class PotreeViewer extends EventEmitter {
 
       // Set OrbitControls target to the center of the point cloud
       // This ensures rotation happens around the object center
-      const { center } = this._getPointCloudWorldBounds(pco);
+      const { center, size } = this._getPointCloudWorldBounds(pco);
       this.controls.target.copy(center);
       this.controls.update();
+      this._log(`Point cloud bounds - center: [${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}], size: [${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}]`, 'debug');
 
       // Configure material AFTER adding to scene
       this._configureMaterial(pco.material);
+      this._log(`Material configured - size: ${pco.material.size}, colorType: ${pco.material.pointColorType}`, 'debug');
 
       // Debug: Check what attributes are available
       console.log('[PotreeViewer] Point cloud attributes:', {
@@ -496,6 +542,22 @@ export class PotreeViewer extends EventEmitter {
     }
 
     this.config.pointBudget = budget;
+    this._log(`Point budget set: ${budget.toLocaleString()}`, 'info');
+  }
+
+  /**
+   * Set camera field of view
+   * @param {number} fov - Field of view in degrees (must be between 1 and 179)
+   */
+  setFov(fov) {
+    if (typeof fov !== 'number' || fov <= 0 || fov >= 180) {
+      throw new Error('FOV must be between 0 and 180 degrees');
+    }
+
+    this.camera.fov = fov;
+    this.camera.updateProjectionMatrix();
+    this.config.fov = fov;
+    this._log(`FOV set: ${fov}°`, 'info');
   }
 
   /**
@@ -512,6 +574,8 @@ export class PotreeViewer extends EventEmitter {
     this.controls.target.set(target.x, target.y, target.z);
     this.camera.lookAt(target.x, target.y, target.z);
     this.controls.update();
+
+    this._log(`View set - pos: [${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}], target: [${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)}]`, 'debug');
 
     this.emit('view-changed', {
       namedView: 'custom',
@@ -668,8 +732,11 @@ export class PotreeViewer extends EventEmitter {
   setNamedView(viewName) {
     if (this.pointClouds.length === 0) {
       console.warn('No point cloud loaded, cannot set view');
+      this._log('Cannot set view: No point cloud loaded', 'warning');
       return;
     }
+
+    this._log(`Setting view: ${viewName}`, 'info');
 
     const pco = this.pointClouds[0];
     const { center } = this._getPointCloudWorldBounds(pco);
@@ -930,9 +997,13 @@ export class PotreeViewer extends EventEmitter {
   setPointColorType(colorType) {
     if (this.pointClouds.length === 0) {
       console.warn('No point cloud loaded');
+      this._log('Cannot set color type: No point cloud loaded', 'warning');
       return;
     }
 
+    const colorTypeNames = { 0: 'RGB', 1: 'COLOR', 2: 'DEPTH', 3: 'HEIGHT', 4: 'INTENSITY', 5: 'INTENSITY_GRADIENT', 6: 'LOD', 7: 'POINT_INDEX', 8: 'CLASSIFICATION', 9: 'RETURN_NUMBER', 10: 'SOURCE', 11: 'NORMAL', 12: 'PHONG', 13: 'RGB_HEIGHT' };
+    const colorName = colorTypeNames[colorType] || colorType;
+    this._log(`Setting color type: ${colorName}`, 'info');
     console.log('[PotreeViewer] Setting point color type to:', colorType);
 
     for (const pco of this.pointClouds) {

@@ -9,17 +9,33 @@ export class PotreeViewerConsole {
     this.messages = [];
     this.maxMessages = options.maxMessages || 50;
 
+    // Log levels: 'debug' | 'info' | 'warning' | 'error'
+    // Each level includes all levels above it (error > warning > info > debug)
+    this.LOG_LEVELS = {
+      debug: 0,
+      info: 1,
+      warning: 2,
+      error: 3,
+      none: 999 // Disable all logging
+    };
+
     this.options = {
       position: options.position || 'bottom-left', // 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right'
       width: options.width || '320px',
       collapsed: options.collapsed || false,
       showTimestamp: options.showTimestamp !== false,
       visible: options.visible !== false, // Show by default
+      logLevel: options.logLevel || 'info', // 'debug' | 'info' | 'warning' | 'error' | 'none'
       ...options
     };
 
     this._init();
     this._attachEventListeners();
+
+    // Register console with viewer
+    if (this.viewer && typeof this.viewer._setConsole === 'function') {
+      this.viewer._setConsole(this);
+    }
 
     // Apply initial visibility
     if (!this.options.visible) {
@@ -50,6 +66,13 @@ export class PotreeViewerConsole {
         Console
       </span>
       <div class="potree-console-actions">
+        <select class="potree-console-loglevel" id="loglevel-select" title="Log level">
+          <option value="debug">Debug</option>
+          <option value="info" selected>Info</option>
+          <option value="warning">Warning</option>
+          <option value="error">Error</option>
+          <option value="none">None</option>
+        </select>
         <button class="potree-console-btn" id="clear-btn" title="Clear console">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/>
@@ -81,6 +104,13 @@ export class PotreeViewerConsole {
     // Attach header events
     header.querySelector('#clear-btn').onclick = () => this.clear();
     header.querySelector('#toggle-btn').onclick = () => this.toggle();
+
+    // Log level dropdown
+    const logLevelSelect = header.querySelector('#loglevel-select');
+    logLevelSelect.value = this.options.logLevel; // Set initial value
+    logLevelSelect.onchange = (e) => {
+      this.setLogLevel(e.target.value);
+    };
 
     // Initial collapsed state
     if (this.options.collapsed) {
@@ -193,9 +223,76 @@ export class PotreeViewerConsole {
   /**
    * Add a log message
    * @param {string} message - The message text
-   * @param {string} type - Message type: 'info' | 'success' | 'warning' | 'error'
+   * @param {string} type - Message type: 'debug' | 'info' | 'success' | 'warning' | 'error'
    */
   log(message, type = 'info') {
+    // Map 'success' to 'info' for level filtering
+    const logLevel = type === 'success' ? 'info' : type;
+
+    // Filter based on log level
+    if (this._shouldLog(logLevel)) {
+      this._addMessage(message, type);
+    }
+  }
+
+  /**
+   * Add a debug message (only shown if logLevel is 'debug')
+   * @param {string} message - The message text
+   */
+  debug(message) {
+    if (this._shouldLog('debug')) {
+      this._addMessage(message, 'debug');
+    }
+  }
+
+  /**
+   * Add an info message
+   * @param {string} message - The message text
+   */
+  info(message) {
+    if (this._shouldLog('info')) {
+      this._addMessage(message, 'info');
+    }
+  }
+
+  /**
+   * Add a warning message
+   * @param {string} message - The message text
+   */
+  warn(message) {
+    if (this._shouldLog('warning')) {
+      this._addMessage(message, 'warning');
+    }
+  }
+
+  /**
+   * Add an error message
+   * @param {string} message - The message text
+   */
+  error(message) {
+    if (this._shouldLog('error')) {
+      this._addMessage(message, 'error');
+    }
+  }
+
+  /**
+   * Check if a message should be logged based on current log level
+   * @private
+   */
+  _shouldLog(messageLevel) {
+    // Use ?? instead of || to handle 0 (debug level) correctly
+    const currentLevel = this.LOG_LEVELS[this.options.logLevel] ?? this.LOG_LEVELS.info;
+    const msgLevel = this.LOG_LEVELS[messageLevel] ?? this.LOG_LEVELS.info;
+    const shouldLog = msgLevel >= currentLevel;
+
+    return shouldLog;
+  }
+
+  /**
+   * Add a message to the console
+   * @private
+   */
+  _addMessage(message, type) {
     const timestamp = new Date().toLocaleTimeString('hr-HR', {
       hour: '2-digit',
       minute: '2-digit',
@@ -236,6 +333,27 @@ export class PotreeViewerConsole {
     }
 
     return messageObj;
+  }
+
+  /**
+   * Set log level
+   * @param {string} level - Log level: 'debug' | 'info' | 'warning' | 'error' | 'none'
+   */
+  setLogLevel(level) {
+    if (this.LOG_LEVELS.hasOwnProperty(level)) {
+      this.options.logLevel = level;
+      this.log(`Log level set to: ${level}`, 'info');
+    } else {
+      console.warn(`Invalid log level: ${level}`);
+    }
+  }
+
+  /**
+   * Get current log level
+   * @returns {string}
+   */
+  getLogLevel() {
+    return this.options.logLevel;
   }
 
   /**
@@ -351,6 +469,37 @@ export class PotreeViewerConsole {
       .potree-console-actions {
         display: flex;
         gap: 4px;
+        align-items: center;
+      }
+
+      .potree-console-loglevel {
+        padding: 2px 6px;
+        margin-right: 6px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        color: rgba(255, 255, 255, 0.8);
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 10px;
+        cursor: pointer;
+        outline: none;
+        transition: all 0.2s;
+      }
+
+      .potree-console-loglevel:hover {
+        background: rgba(0, 0, 0, 0.5);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 1);
+      }
+
+      .potree-console-loglevel:focus {
+        border-color: #3498db;
+        box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+      }
+
+      .potree-console-loglevel option {
+        background: rgba(40, 44, 52, 1);
+        color: rgba(255, 255, 255, 0.9);
       }
 
       .potree-console-btn {
@@ -431,6 +580,14 @@ export class PotreeViewerConsole {
       .potree-console-message .text {
         color: rgba(255, 255, 255, 0.85);
         flex: 1;
+      }
+
+      .potree-console-message.debug {
+        background: rgba(155, 89, 182, 0.1);
+      }
+
+      .potree-console-message.debug .text {
+        color: #af7ac5;
       }
 
       .potree-console-message.info {

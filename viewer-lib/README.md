@@ -203,6 +203,8 @@ const toolbar = new Toolbar(viewer, {
    - Distance, Height, Angle, Radius, Volume
 4. **Clear Measurements** (X button) - Clears all measurements and exits measurement mode (disabled when no measurements exist)
 5. **Settings** dropdown with:
+   - Point Budget slider (100K - 5M points) - Controls maximum number of visible points
+   - Field of View slider (30° - 120°) - Controls camera perspective
    - Point Size slider (0.1 - 5.0)
    - Point Shape (Square / Circle)
    - Point Size Type (Fixed / Attenuated / Adaptive)
@@ -219,7 +221,41 @@ const console = new PotreeViewerConsole(viewer, {
   showTimestamp: true,     // Show timestamp for each message
   visible: true,           // Initially visible
   maxMessages: 50,         // Maximum messages to keep
+
+  // Log level filtering
+  logLevel: 'info',        // 'debug' | 'info' | 'warning' | 'error' | 'none'
+  // 'debug' - Show all messages including debug info
+  // 'info' - Show info, warnings, and errors (default)
+  // 'warning' - Show warnings and errors only
+  // 'error' - Show errors only
+  // 'none' - Disable all logging
 });
+```
+
+**Log Levels Explained:**
+- `debug` - Detailed technical information useful for development and troubleshooting
+- `info` - General informational messages about viewer operations (default level)
+- `warning` - Warning messages that don't prevent operation but may indicate issues
+- `error` - Error messages for failures and critical problems
+
+The viewer automatically logs important operations:
+- Point cloud loading and initialization
+- Camera view changes
+- Measurement operations (adding points, completing measurements)
+- Point budget and FOV changes
+- Color mode switches
+
+**Examples:**
+```javascript
+// Set log level at creation
+const console = new PotreeViewerConsole(viewer, { logLevel: 'debug' });
+
+// Change log level dynamically
+console.setLogLevel('warning'); // Only show warnings and errors
+console.setLogLevel('debug');   // Show all messages
+
+// Get current log level
+const level = console.getLogLevel(); // returns 'debug', 'info', 'warning', 'error', or 'none'
 ```
 
 ## API Reference
@@ -232,6 +268,7 @@ Below is a complete list of all public methods available on the `PotreeViewer` i
 - `setView(position, target)` - Set camera position and target
 - `setNamedView(viewName)` - Set predefined view ('top', 'bottom', 'front', 'back', 'left', 'right')
 - `getNamedView()` - Get current named view or 'custom'
+- `setFov(fov)` - Set camera field of view in degrees (30 - 120)
 - `fitToScreen()` - Fit point cloud to viewport
 
 **Point Cloud Management**
@@ -283,6 +320,9 @@ viewer.setNamedView('top' | 'bottom' | 'front' | 'back' | 'left' | 'right');
 
 // Get current view name
 const viewName = viewer.getNamedView(); // returns view name or 'custom'
+
+// Set field of view (controls camera perspective)
+viewer.setFov(60);  // degrees (30 - 120), default: 80
 
 // Fit point cloud to screen
 viewer.fitToScreen();
@@ -412,11 +452,21 @@ console.toggle();
 // Clear all messages
 console.clear();
 
-// Add custom messages
-console.log('Message', 'info');    // info, success, warning, error
+// Add custom messages (filtered by log level)
+console.log('Message', 'info');    // Generic log method
+console.debug('Debug info');        // Debug messages (shown only with logLevel='debug')
+console.info('Information');        // Info messages
+console.warn('Warning message');    // Warning messages
+console.error('Error message');     // Error messages
+
+// Legacy log method with type parameter
 console.log('Success!', 'success');
 console.log('Warning!', 'warning');
 console.log('Error!', 'error');
+
+// Manage log level
+console.setLogLevel('debug');      // Change log level dynamically
+const level = console.getLogLevel(); // Get current log level
 
 // Dispose console
 console.dispose();

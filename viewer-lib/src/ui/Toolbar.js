@@ -1,9 +1,9 @@
-/**
- * Configurable toolbar UI for PotreeViewer
- * Provides controls for navigation, measurements, and views
- */
-import { PointColorType } from '../index.js';
+import { PointColorType } from 'potree-core';
 
+/**
+ * Toolbar component for PotreeViewer
+ * Provides UI controls for measurements, views, and settings
+ */
 export class Toolbar {
   constructor(viewer, options = {}) {
     this.viewer = viewer;
@@ -76,16 +76,16 @@ export class Toolbar {
 
     // Default button groups - reorganized: View → Measurements → Settings
     const defaultButtons = [
-      // View controls (includes camera views, color modes, backgrounds)
+      // View controls group
       { id: 'fit', group: 'view', label: 'Fit to Screen', icon: ICONS.maximize, action: () => this.viewer.fitToScreen() },
-      { id: 'view-selector', group: 'view', label: 'View & Appearance', icon: ICONS.eye, type: 'view-dropdown' },
+      { id: 'view-selector', group: 'view', label: 'View & Appearance', icon: ICONS.eye, type: 'view-dropdown', groupEnd: true },
 
-      // Measurements
+      // Measurements group
       { id: 'measurements', group: 'measurement', label: 'Measurements', icon: ICONS.ruler, type: 'measurements-dropdown' },
-      { id: 'clear', group: 'measurement', label: 'Clear Measurements', icon: ICONS.x, action: () => this._clearMeasurements() },
+      { id: 'clear', group: 'measurement', label: 'Clear Measurements', icon: ICONS.x, action: () => this._clearMeasurements(), groupEnd: true },
 
-      // Settings
-      { id: 'settings', group: 'settings', label: 'Settings', icon: ICONS.settings, type: 'settings-dropdown' },
+      // Settings group (single button)
+      { id: 'settings', group: 'settings', label: 'Settings', icon: ICONS.settings, type: 'settings-dropdown', groupEnd: true },
     ];
 
     this.options = {
@@ -95,103 +95,50 @@ export class Toolbar {
     };
 
     this._init();
+  }
+
+  /**
+   * Initialize toolbar
+   * @private
+   */
+  _init() {
+    this._injectStyles();
+
+    // Create container
+    this.container = document.createElement('div');
+    this.container.className = 'potree-toolbar';
+    this.container.dataset.alignment = this.options.alignment;
+
+    // Create buttons
+    this.options.buttons.forEach(btnConfig => {
+      const button = this._createButton(btnConfig);
+      this.container.appendChild(button);
+    });
+
+    // Add to viewer container
+    this.viewer.container.appendChild(this.container);
+
+    // Attach event listeners
     this._attachEventListeners();
   }
 
   /**
-   * Initialize toolbar HTML
-   * @private
-   */
-  _init() {
-    // Create toolbar container
-    this.container = document.createElement('div');
-    this.container.className = 'potree-toolbar';
-    this.container.style.cssText = this._getContainerStyles();
-
-    // Group buttons by their group property
-    const buttonGroups = {};
-    for (const btn of this.options.buttons) {
-      if (!buttonGroups[btn.group]) {
-        buttonGroups[btn.group] = [];
-      }
-      buttonGroups[btn.group].push(btn);
-    }
-
-    // Create button groups
-    for (const [groupName, buttons] of Object.entries(buttonGroups)) {
-      const groupContainer = this._createButtonGroup(buttons);
-      this.container.appendChild(groupContainer);
-    }
-
-    // Inject styles
-    this._injectStyles();
-
-    // Add to viewer container
-    this.viewer.container.appendChild(this.container);
-  }
-
-  /**
-   * Get container styles based on alignment
-   * @private
-   */
-  _getContainerStyles() {
-    const baseStyles = `
-      position: absolute;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px;
-      z-index: 1000;
-      user-select: none;
-      pointer-events: auto;
-    `;
-
-    const alignmentMap = {
-      'top-left': 'top: 12px; left: 12px; flex-direction: row;',
-      'top-right': 'top: 12px; right: 12px; flex-direction: row;',
-      'bottom-left': 'bottom: 12px; left: 12px; flex-direction: row;',
-      'bottom-right': 'bottom: 12px; right: 12px; flex-direction: row;',
-      'left': 'left: 12px; top: 50%; transform: translateY(-50%); flex-direction: column;',
-      'right': 'right: 12px; top: 50%; transform: translateY(-50%); flex-direction: column;',
-      'top': 'top: 12px; left: 50%; transform: translateX(-50%); flex-direction: row;',
-      'bottom': 'bottom: 12px; left: 50%; transform: translateX(-50%); flex-direction: row;',
-    };
-
-    return baseStyles + (alignmentMap[this.options.alignment] || alignmentMap['top-right']);
-  }
-
-  /**
-   * Create a button group
-   * @private
-   */
-  _createButtonGroup(buttons) {
-    const group = document.createElement('div');
-    group.className = 'potree-toolbar-group';
-    group.style.cssText = `
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    `;
-
-    for (const btnConfig of buttons) {
-      const btn = this._createButton(btnConfig);
-      group.appendChild(btn);
-    }
-
-    return group;
-  }
-
-  /**
-   * Set measurement mode helper
+   * Set measurement mode
    * @private
    */
   _setMeasurementMode(mode) {
     this.viewer.setMeasurementMode(mode);
+    this._updateButtonStates(mode);
+  }
 
-    // Update active state for measurement buttons
+  /**
+   * Update measurement button active states
+   * @private
+   */
+  _updateButtonStates(activeMode) {
     const buttons = this.container.querySelectorAll('.potree-toolbar-button[data-mode]');
     buttons.forEach(btn => {
-      if (btn.dataset.mode === mode) {
+      if (btn.dataset.mode === activeMode) {
         btn.classList.add('active');
       } else {
         btn.classList.remove('active');
@@ -247,7 +194,7 @@ export class Toolbar {
     // Exit measurement mode completely
     this.viewer.setMeasurementMode('none');
 
-    // Deactivate all measurement buttons
+    // Remove active state from all measurement buttons
     const buttons = this.container.querySelectorAll('.potree-toolbar-button[data-mode]');
     buttons.forEach(btn => btn.classList.remove('active'));
   }
@@ -259,23 +206,34 @@ export class Toolbar {
   _createButton(config) {
     // Handle different dropdown types
     if (config.type === 'view-dropdown') {
-      return this._createViewDropdown(config);
+      const dropdown = this._createViewDropdown(config);
+      if (config.groupEnd) dropdown.classList.add('group-end');
+      return dropdown;
     }
     if (config.type === 'measurements-dropdown') {
-      return this._createMeasurementsDropdown(config);
+      const dropdown = this._createMeasurementsDropdown(config);
+      if (config.groupEnd) dropdown.classList.add('group-end');
+      return dropdown;
     }
     if (config.type === 'settings-dropdown') {
-      return this._createSettingsDropdown(config);
+      const dropdown = this._createSettingsDropdown(config);
+      if (config.groupEnd) dropdown.classList.add('group-end');
+      return dropdown;
     }
 
     const button = document.createElement('button');
     button.className = 'potree-toolbar-button';
     button.title = config.label; // Tooltip
 
+    // Add group-end class if this is the last button in a group
+    if (config.groupEnd) {
+      button.classList.add('group-end');
+    }
+
     // Add icon (SVG or text)
     const iconSpan = document.createElement('span');
     iconSpan.className = 'potree-button-icon';
-    iconSpan.innerHTML = config.icon; // Use innerHTML to support SVG
+    iconSpan.innerHTML = config.icon;
     button.appendChild(iconSpan);
 
     // Add data attribute for measurement modes
@@ -478,6 +436,18 @@ export class Toolbar {
       else if (material.pointSizeType === 2) currentSizeType = 'adaptive';
     }
 
+    // Point Budget slider
+    const budgetControl = createSlider('Point Budget', 100000, 10000000, 100000, this.viewer.config.pointBudget, (value) => {
+      this.viewer.setPointBudget(value);
+    });
+    menu.appendChild(budgetControl.container);
+
+    // FOV slider
+    const fovControl = createSlider('Field of View', 20, 100, 1, this.viewer.config.fov, (value) => {
+      this.viewer.setFov(value);
+    });
+    menu.appendChild(fovControl.container);
+
     // Point Size slider - will be updated when dropdown opens
     const sizeControl = createSlider('Point Size', 0.1, 5.0, 0.1, defaultSize, (value) => {
       this.viewer.setPointSize(value);
@@ -537,6 +507,14 @@ export class Toolbar {
           sizeTypeControl.select.value = sizeTypeValue;
         }
 
+        // Update budget slider
+        budgetControl.slider.value = this.viewer.config.pointBudget;
+        budgetControl.valueSpan.textContent = this.viewer.config.pointBudget.toLocaleString();
+
+        // Update FOV slider
+        fovControl.slider.value = this.viewer.config.fov;
+        fovControl.valueSpan.textContent = this.viewer.config.fov;
+
         // Position dropdown intelligently
         this._positionDropdown(menu, button);
       }
@@ -551,7 +529,7 @@ export class Toolbar {
     container.appendChild(menu);
 
     // Store reference
-    this.settingsDropdown = { container, menu, button, sizeControl };
+    this.settingsDropdown = { container, menu, button, sizeControl, budgetControl, fovControl };
     this.dropdowns.push(this.settingsDropdown);
 
     return container;
@@ -841,21 +819,6 @@ export class Toolbar {
   }
 
   /**
-   * Update button active states
-   * @private
-   */
-  _updateButtonStates(activeMode) {
-    const buttons = this.container.querySelectorAll('.potree-toolbar-button[data-mode]');
-    buttons.forEach(btn => {
-      if (btn.dataset.mode === activeMode) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-  }
-
-  /**
    * Update view dropdown to highlight active color type
    * @private
    */
@@ -957,43 +920,132 @@ export class Toolbar {
     style.id = 'potree-toolbar-styles';
     style.textContent = `
       .potree-toolbar {
-        background: transparent;
-        pointer-events: none;
+        position: absolute;
+        display: flex;
+        gap: 0px;
+        padding: 10px;
+        z-index: 1000;
       }
 
-      .potree-toolbar-group {
-        background: rgba(40, 44, 52, 0.75);
-        backdrop-filter: blur(8px);
-        border-radius: 8px;
-        padding: 3px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-        pointer-events: auto;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+      /* Alignment positioning */
+      .potree-toolbar[data-alignment="top-left"] {
+        top: 0;
+        left: 0;
+        flex-direction: row;
       }
 
+      .potree-toolbar[data-alignment="top-right"] {
+        top: 0;
+        right: 0;
+        flex-direction: row;
+      }
+
+      .potree-toolbar[data-alignment="bottom-left"] {
+        bottom: 0;
+        left: 0;
+        flex-direction: row;
+      }
+
+      .potree-toolbar[data-alignment="bottom-right"] {
+        bottom: 0;
+        right: 0;
+        flex-direction: row;
+      }
+
+      .potree-toolbar[data-alignment="left"] {
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        flex-direction: column;
+      }
+
+      .potree-toolbar[data-alignment="right"] {
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        flex-direction: column;
+      }
+
+      .potree-toolbar[data-alignment="top"] {
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        flex-direction: row;
+      }
+
+      .potree-toolbar[data-alignment="bottom"] {
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        flex-direction: row;
+      }
+
+      /* Button styles */
       .potree-toolbar-button {
-        width: 36px;
-        height: 36px;
+        width: 42px;
+        height: 42px;
         padding: 0;
         border: none;
-        background: transparent;
+        background: rgba(40, 44, 52, 0.85);
+        backdrop-filter: blur(10px);
         color: rgba(255, 255, 255, 0.85);
+        border-radius: 0;
         cursor: pointer;
-        border-radius: 6px;
         transition: all 0.2s ease;
+        box-shadow: none;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-right: none;
         display: flex;
         align-items: center;
         justify-content: center;
         position: relative;
       }
 
-      .potree-toolbar-button:hover {
-        background: rgba(255, 255, 255, 0.12);
+      /* Handle dropdown containers */
+      .potree-settings-dropdown,
+      .potree-view-dropdown,
+      .potree-measurements-dropdown {
+        display: inline-block;
       }
 
-      .potree-toolbar-button:active {
-        background: rgba(255, 255, 255, 0.2);
-        transform: scale(0.95);
+      /* First button in toolbar or first in a group after spacing */
+      .potree-toolbar > button:first-child,
+      .potree-toolbar > div:first-child .potree-toolbar-button,
+      .potree-toolbar > .group-end + button,
+      .potree-toolbar > .group-end + div .potree-toolbar-button {
+        border-top-left-radius: 8px;
+        border-bottom-left-radius: 8px;
+      }
+
+      /* Last button in a group (has group-end class) */
+      .potree-toolbar-button.group-end,
+      .potree-settings-dropdown.group-end .potree-toolbar-button,
+      .potree-view-dropdown.group-end .potree-toolbar-button,
+      .potree-measurements-dropdown.group-end .potree-toolbar-button {
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        border-top-right-radius: 8px;
+        border-bottom-right-radius: 8px;
+      }
+
+      /* Add spacing after groups */
+      .potree-toolbar-button.group-end,
+      .potree-settings-dropdown.group-end,
+      .potree-view-dropdown.group-end,
+      .potree-measurements-dropdown.group-end {
+        margin-right: 8px;
+      }
+
+      /* Shared shadow for entire group */
+      .potree-toolbar > button,
+      .potree-toolbar > div {
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.15));
+      }
+
+      .potree-toolbar-button:hover {
+        background: rgba(52, 152, 219, 0.9);
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
 
       .potree-toolbar-button.active {
@@ -1032,7 +1084,7 @@ export class Toolbar {
         display: none;
         position: absolute;
         top: 100%;
-        left: 0; 
+        left: 0;
         background: rgba(40, 44, 52, 0.95);
         backdrop-filter: blur(8px);
         border-radius: 6px;
@@ -1040,7 +1092,7 @@ export class Toolbar {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         border: 1px solid rgba(255, 255, 255, 0.1);
         min-width: 140px;
-        z-index: 10000; 
+        z-index: 10000;
         margin-left: -3px;
         margin-top: 10px;
       }

@@ -334,33 +334,33 @@ export class PotreeViewer extends EventEmitter {
         activeAttributeName: pco.material.activeAttributeName,
         attributes: Object.keys(pco.material.attributes || {}),
         pcoAttributes: pco.pcoGeometry?.pointAttributes?.attributes?.map(a => a.name),
+        newFormat: pco.pcoGeometry?.loader?.metadata?.newFormat,
+        materialNewFormat: pco.material.newFormat,
       });
 
-      // CRITICAL FIX: Set pointColorType based on available attributes
-      // potree-core 2.x uses pointColorType enum, NOT activeAttributeName (that was Potree 1.x)
-      if (pco.pcoGeometry?.pointAttributes) {
-        const availableAttrs = pco.pcoGeometry.pointAttributes.attributes || [];
-        const hasRGB = availableAttrs.some(a => a.name === 'rgb' || a.name === 'rgba');
-        const hasClassification = availableAttrs.some(a => a.name === 'classification');
+      // CRITICAL DEBUG: Check if using new_format
+      if (pco.material.vertexShader) {
+        const hasNewFormat = pco.material.vertexShader.includes('#define new_format');
+        const hasColorTypeRgb = pco.material.vertexShader.includes('#define color_type_rgb');
+        console.log('[PotreeViewer] Shader defines:', { hasNewFormat, hasColorTypeRgb });
 
-        if (hasRGB) {
-          console.log('[PotreeViewer] RGB attribute found - setting pointColorType to RGB (0)');
-          pco.material.pointColorType = PointColorType.RGB; // 0
-
-          // Set color encoding like official example
-          pco.material.inputColorEncoding = 1;
-          pco.material.outputColorEncoding = 1;
-        } else if (hasClassification) {
-          console.log('[PotreeViewer] No RGB, using classification colors');
-          pco.material.pointColorType = PointColorType.CLASSIFICATION; // 8
-        } else {
-          console.log('[PotreeViewer] No RGB or classification, using elevation colors');
-          pco.material.pointColorType = PointColorType.ELEVATION; // 3
+        if (hasNewFormat) {
+          console.warn('[PotreeViewer] ⚠️  WARNING: Point cloud uses new_format!');
+          console.warn('[PotreeViewer] new_format uses RGBA attribute directly from geometry');
+          console.warn('[PotreeViewer] pointColorType will be IGNORED - color modes won\'t work!');
         }
-
-        // Mark material as needing update
-        pco.material.needsUpdate = true;
       }
+
+      // Set color encoding for proper color display
+      // potree-core will use its default pointColorType (usually RGB if available)
+      pco.material.inputColorEncoding = 1;  // sRGB input
+      pco.material.outputColorEncoding = 1; // sRGB output
+
+      // Log what potree-core chose as default
+      console.log('[PotreeViewer] Point cloud loaded with default pointColorType:', pco.material.pointColorType);
+
+      // DON'T force any specific color type here - let potree-core use its default
+      // User can change it later with setPointColorType()
 
       // Emit event
       this.emit('pointcloud-loaded', pco);
@@ -753,10 +753,109 @@ export class PotreeViewer extends EventEmitter {
       return;
     }
 
+    console.log('[PotreeViewer] Setting point color type to:', colorType);
+
     for (const pco of this.pointClouds) {
       if (pco.material) {
+        const oldType = pco.material.pointColorType;
+
+        // CRITICAL FIX: Must clear WebGL cache BEFORE regenerating shader source!
+        // The order is crucial: delete cache → set color type → regenerate shader → render
+
+        // Step 1: Fully dispose material to clear ALL WebGL state
+        // This prevents "uniform location not from associated program" errors
+        pco.material.dispose();
+
+        // Step 1b: Also clear renderer cache
+        if (this.renderer && this.renderer.properties) {
+          const materialProps = this.renderer.properties.get(pco.material);
+          if (materialProps) {
+            // Delete the entire programs array
+            if (materialProps.programs) {
+              materialProps.programs.forEach(p => {
+                if (p && p.destroy) p.destroy();
+              });
+              delete materialProps.programs;
+            }
+            // Delete all program references and caches
+            delete materialProps.program;
+            delete materialProps.currentProgram;
+            delete materialProps.shader;
+            delete materialProps.__webglShader;
+
+            console.log('[PotreeViewer] ✓ Fully disposed material and cleared WebGL cache');
+          }
+        }
+
+        // Step 2: Handle new_format flag based on color type
+        // new_format uses RGBA from geometry - keep it ONLY for RGB color type
+        // For other color types (ELEVATION, CLASSIFICATION, etc.) we must disable it
+        const hadNewFormat = pco.material.newFormat;
+        const isRGBColorType = (colorType === 0); // PointColorType.RGB = 0
+
+        if (hadNewFormat && !isRGBColorType) {
+          console.log('[PotreeViewer] Disabling new_format to use color type:', colorType);
+          pco.material.newFormat = false;
+        } else if (!hadNewFormat && isRGBColorType) {
+          console.log('[PotreeViewer] Enabling new_format for RGB color type');
+          pco.material.newFormat = true;
+        }
+
+        // Step 3: Set new color type
         pco.material.pointColorType = colorType;
+
+        // Step 4: Regenerate shader source with new #defines
+        if (typeof pco.material.updateShaderSource === 'function') {
+          pco.material.updateShaderSource();
+
+          // Verify shader was regenerated correctly
+          const hasNewFormat = pco.material.vertexShader?.includes('#define new_format');
+          const colorTypeDefine = pco.material.vertexShader?.match(/#define color_type_\w+/)?.[0];
+
+          console.log('[PotreeViewer] ✓ Regenerated shader:', {
+            oldColorType: oldType,
+            newColorType: colorType,
+            colorTypeDefine,
+            hasNewFormat,
+            shouldHaveNewFormat: isRGBColorType,
+            materialNewFormat: pco.material.newFormat
+          });
+
+          // Sanity check
+          if (isRGBColorType && !hasNewFormat) {
+            console.error('[PotreeViewer] ⚠️  RGB color type but new_format not in shader!');
+          } else if (!isRGBColorType && hasNewFormat) {
+            console.error('[PotreeViewer] ⚠️  Non-RGB color type but new_format still in shader!');
+          }
+        } else {
+          console.error('[PotreeViewer] ⚠️  updateShaderSource() does not exist!');
+        }
+
+        console.log('[PotreeViewer] ✅ Changed color type from', oldType, 'to', colorType);
+        console.log('[PotreeViewer] Shader has color_type:',
+          pco.material.vertexShader?.includes(`color_type_${Object.keys({
+            0: 'rgb', 3: 'height', 4: 'intensity', 5: 'intensity_gradient',
+            8: 'classification', 11: 'normal'
+          })[colorType] || colorType}`));
       }
+    }
+
+    // Emit event for UI updates
+    this.emit('color-type-changed', colorType);
+
+    // CRITICAL: Force multiple renders to ensure shader recompilation
+    // Three.js needs to detect missing program and then compile new shader
+    if (this.renderer && this.scene && this.camera) {
+      // First render - Three.js detects missing program
+      this.renderer.render(this.scene, this.camera);
+
+      // Force a second render on next frame to compile and use new shader
+      requestAnimationFrame(() => {
+        if (this.renderer && this.scene && this.camera) {
+          this.renderer.render(this.scene, this.camera);
+          console.log('[PotreeViewer] ✓ Forced shader recompilation with second render');
+        }
+      });
     }
   }
 

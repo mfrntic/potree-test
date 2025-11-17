@@ -5,7 +5,9 @@
       "Bash(cat:*)",
       "Bash(npm install:*)",
       "Bash(npm run dev:*)",
-      "Bash(npm info:*)"
+      "Bash(npm info:*)",
+      "Bash(node -e:*)",
+      "Bash(node --input-type=module -e:*)"
     ],
     "deny": [],
     "ask": []

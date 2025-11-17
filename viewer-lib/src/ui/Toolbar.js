@@ -2,11 +2,14 @@
  * Configurable toolbar UI for PotreeViewer
  * Provides controls for navigation, measurements, and views
  */
+import { PointColorType } from '../index.js';
+
 export class Toolbar {
   constructor(viewer, options = {}) {
     this.viewer = viewer;
     this.container = null;
     this.currentMeasurement = null;
+    this.colorModeDropdown = null;
 
     // SVG Icons from Lucide (https://lucide.dev) - MIT License
     const ICONS = {
@@ -23,10 +26,27 @@ export class Toolbar {
       arrowUp: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>',
       chevronUp: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>',
       chevronDown: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+      palette: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>',
     };
+
+    // Color modes available (most commonly used from potree-core)
+    this.colorModes = [
+      { id: PointColorType.RGB, label: 'RGB' },
+      { id: PointColorType.ELEVATION, label: 'Elevation' },
+      { id: PointColorType.CLASSIFICATION, label: 'Classification' },
+      { id: PointColorType.INTENSITY, label: 'Intensity' },
+      { id: PointColorType.INTENSITY_GRADIENT, label: 'Intensity Gradient' },
+      { id: PointColorType.RETURN_NUMBER, label: 'Return Number' },
+      { id: PointColorType.SOURCE, label: 'Source ID' },
+      { id: PointColorType.NORMAL, label: 'Normal' },
+      { id: PointColorType.LOD, label: 'Level of Detail' },
+    ];
 
     // Default button groups
     const defaultButtons = [
+      // Color mode selector
+      { id: 'color-mode', group: 'color', label: 'Color Mode', icon: ICONS.palette, type: 'dropdown' },
+
       // Measurements
       { id: 'distance', group: 'measurement', label: 'Distance', icon: ICONS.ruler, action: () => this._setMeasurementMode('distance') },
       { id: 'height', group: 'measurement', label: 'Height', icon: ICONS.moveVertical, action: () => this._setMeasurementMode('height') },
@@ -176,6 +196,11 @@ export class Toolbar {
    * @private
    */
   _createButton(config) {
+    // Handle dropdown type buttons differently
+    if (config.type === 'dropdown') {
+      return this._createColorModeDropdown(config);
+    }
+
     const button = document.createElement('button');
     button.className = 'potree-toolbar-button';
     button.title = config.label; // Tooltip
@@ -200,6 +225,112 @@ export class Toolbar {
   }
 
   /**
+   * Create color mode dropdown
+   * @private
+   */
+  _createColorModeDropdown(config) {
+    const container = document.createElement('div');
+    container.className = 'potree-color-dropdown';
+    container.style.cssText = 'position: relative;';
+
+    // Create dropdown button
+    const button = document.createElement('button');
+    button.className = 'potree-toolbar-button';
+    button.title = config.label;
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'potree-button-icon';
+    iconSpan.innerHTML = config.icon;
+    button.appendChild(iconSpan);
+
+    // Create dropdown menu
+    const menu = document.createElement('div');
+    menu.className = 'potree-dropdown-menu';
+    menu.style.cssText = `
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: rgba(40, 44, 52, 0.95);
+      backdrop-filter: blur(8px);
+      border-radius: 6px;
+      padding: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      min-width: 160px;
+      z-index: 10000;
+    `;
+
+    // Add color mode options
+    this.colorModes.forEach(mode => {
+      const option = document.createElement('button');
+      option.className = 'potree-dropdown-option';
+      option.textContent = mode.label;
+      option.dataset.colorMode = mode.id;
+      option.style.cssText = `
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.85);
+        text-align: left;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 13px;
+        transition: background 0.15s ease;
+      `;
+
+      option.onclick = (e) => {
+        e.stopPropagation();
+        this.viewer.setPointColorType(mode.id);
+        menu.style.display = 'none';
+
+        // Update active state
+        menu.querySelectorAll('.potree-dropdown-option').forEach(opt => {
+          opt.style.background = 'transparent';
+        });
+        option.style.background = 'rgba(52, 152, 219, 0.3)';
+      };
+
+      option.onmouseenter = () => {
+        if (option.style.background !== 'rgba(52, 152, 219, 0.3)') {
+          option.style.background = 'rgba(255, 255, 255, 0.1)';
+        }
+      };
+
+      option.onmouseleave = () => {
+        if (option.style.background !== 'rgba(52, 152, 219, 0.3)') {
+          option.style.background = 'transparent';
+        }
+      };
+
+      menu.appendChild(option);
+    });
+
+    // Toggle dropdown on button click
+    button.onclick = (e) => {
+      e.stopPropagation();
+      const isVisible = menu.style.display === 'block';
+      menu.style.display = isVisible ? 'none' : 'block';
+    };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+      menu.style.display = 'none';
+    });
+
+    container.appendChild(button);
+    container.appendChild(menu);
+
+    // Store reference
+    this.colorModeDropdown = { container, menu, button };
+
+    return container;
+  }
+
+  /**
    * Attach event listeners to viewer
    * @private
    */
@@ -211,6 +342,19 @@ export class Toolbar {
 
     this.viewer.on('measurement-mode-changed', (mode) => {
       this._updateButtonStates(mode);
+    });
+
+    // Update color mode dropdown when color type changes
+    this.viewer.on('color-type-changed', (colorType) => {
+      this._updateColorModeDropdown(colorType);
+    });
+
+    // Initialize color mode dropdown with current color type
+    this.viewer.on('pointcloud-loaded', () => {
+      const currentColorType = this.viewer.getPointColorType();
+      if (currentColorType !== undefined) {
+        this._updateColorModeDropdown(currentColorType);
+      }
     });
   }
 
@@ -225,6 +369,25 @@ export class Toolbar {
         btn.classList.add('active');
       } else {
         btn.classList.remove('active');
+      }
+    });
+  }
+
+  /**
+   * Update color mode dropdown to highlight active color type
+   * @private
+   */
+  _updateColorModeDropdown(colorType) {
+    if (!this.colorModeDropdown || !this.colorModeDropdown.menu) {
+      return;
+    }
+
+    const options = this.colorModeDropdown.menu.querySelectorAll('.potree-dropdown-option');
+    options.forEach(option => {
+      if (parseInt(option.dataset.colorMode) === colorType) {
+        option.style.background = 'rgba(52, 152, 219, 0.3)';
+      } else {
+        option.style.background = 'transparent';
       }
     });
   }

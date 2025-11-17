@@ -27,7 +27,7 @@
   <div id="container"></div>
 
   <script type="module">
-    import { PotreeViewer, Toolbar, PotreeViewerConsole } from './src/index.js';
+    import { PotreeViewer, Toolbar, PotreeViewerConsole, PointColorType } from './src/index.js';
 
     // Create viewer
     const viewer = new PotreeViewer({
@@ -40,12 +40,12 @@
       fov: 80,
       initialView: 'right',
       material: {
-        size: 0.6,
+        size: 1,
         minSize: 0.4,
         pointSizeType: 'FIXED',
         shape: 'SQUARE',
       },
-      background: 'black',
+      background: 'white',
       autoFitOnLoad: true,
 
       // Callbacks
@@ -55,6 +55,9 @@
 
       onPointCloudLoaded: (pointCloud) => {
         console.log('Point cloud loaded:', pointCloud);
+
+        // Set color type AFTER point cloud is loaded
+        viewer.setPointColorType(PointColorType.ELEVATION);
       },
 
       onError: (error) => {
@@ -87,7 +90,7 @@
     window.viewer = viewer;
     window.toolbar = toolbar;
     window.viewerConsole = viewerConsole;
-
+ 
     // Clean up on page unload
     window.addEventListener('beforeunload', () => {
       toolbar.dispose();

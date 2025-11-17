@@ -39,3 +39,9 @@ coverage/
 .parcel-cache/
 .npm/
 .eslintcache
+
+# Large point cloud data files
+viewer-lib/public/*/octree.bin
+viewer-lib/public/spruce/
+viewer-lib/public/raleigh/
+viewer-lib/public/plot/

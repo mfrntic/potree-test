@@ -7,9 +7,9 @@ Modern, framework-agnostic JavaScript library for visualizing large-scale point 
 - 🚀 **Modern ESM architecture** - Clean imports, no global variables
 - 🎯 **Framework-agnostic** - Works with vanilla JS, React, Vue, or any framework
 - 📏 **5 measurement types** - Distance, Height, Angle, Radius, and Volume measurements
-- 🎨 **Customizable UI** - Configurable Toolbar and Console components
-- 🌈 **LAS Classification support** - Automatic color-coding based on point classifications
-- 💡 **Eye-Dome Lighting (EDL)** - Enhanced depth perception and structure visibility
+- 🎨 **Modern UI Components** - Toolbar with dropdown menus and Console for measurements
+- 🌈 **Multiple color modes** - RGB, Elevation, Classification, Intensity, and more
+- 🎥 **Named camera views** - Quick access to Top, Bottom, Left, Right, Front, Back views
 - 📦 **Lightweight** - No jQuery or legacy dependencies
 - 🔧 **Full API** - Programmatic control over viewer, measurements, and camera
 - 🎬 **Event-driven** - Subscribe to viewer events for custom integrations
@@ -18,19 +18,19 @@ Modern, framework-agnostic JavaScript library for visualizing large-scale point 
 
 ### Installation
 
-#### Option 1: npm Package (Recommended)
+#### Local Development
+
+This library is currently in development and not yet published to npm.
 
 ```bash
-npm install potree-viewer
+# Install dependencies
+cd viewer-lib
+npm install
 ```
 
-#### Option 2: Local Development
-
-```bash
-npm install potree-core three
-```
-
-Copy the `viewer-lib` directory to your project.
+Dependencies:
+- `three` - Three.js 3D library
+- `potree-core` - Core Potree point cloud rendering engine
 
 ### Minimal Example
 
@@ -193,8 +193,19 @@ const toolbar = new Toolbar(viewer, {
 ```
 
 **Default toolbar buttons:**
-- **Measurements**: Distance, Height, Angle, Radius, Volume, Clear
-- **Views**: Fit to Screen, Top, Bottom, Front, Back, Left, Right
+
+1. **Fit to Screen** - Automatically fits the point cloud to the viewport
+2. **View & Appearance** dropdown with:
+   - **Camera Views**: Left, Right, Front, Back, Top, Bottom
+   - **Point Color Mode**: RGB, Elevation, Classification, Intensity, Intensity Gradient, Return Number, Source ID, Normal, Level of Detail
+   - **Background**: Black, White, Gradient, Skybox
+3. **Measurements** dropdown with:
+   - Distance, Height, Angle, Radius, Volume
+4. **Clear Measurements** (X button) - Clears all measurements and exits measurement mode (disabled when no measurements exist)
+5. **Settings** dropdown with:
+   - Point Size slider (0.1 - 5.0)
+   - Point Shape (Square / Circle)
+   - Point Size Type (Fixed / Attenuated / Adaptive)
 
 ### PotreeViewerConsole Options
 
@@ -213,7 +224,50 @@ const console = new PotreeViewerConsole(viewer, {
 
 ## API Reference
 
-### Viewer Methods
+### Complete Method Reference
+
+Below is a complete list of all public methods available on the `PotreeViewer` instance:
+
+**Camera & View**
+- `setView(position, target)` - Set camera position and target
+- `setNamedView(viewName)` - Set predefined view ('top', 'bottom', 'front', 'back', 'left', 'right')
+- `getNamedView()` - Get current named view or 'custom'
+- `fitToScreen()` - Fit point cloud to viewport
+
+**Point Cloud Management**
+- `loadPointCloud(url, name)` - Load a point cloud (returns Promise)
+- `setPointBudget(budget)` - Set maximum visible points (default: 1,000,000)
+- `setBackground(background)` - Set background ('black', 'white', 'gradient', 'skybox', or hex color)
+
+**Point Appearance**
+- `setPointColorType(colorType)` - Set point coloring mode (use PointColorType enum)
+- `getPointColorType()` - Get current color type
+- `setPointSize(size)` - Set point size in pixels (0.1 - 5.0)
+- `setPointOpacity(opacity)` - Set point opacity (0.0 - 1.0)
+- `setPointShape(shape)` - Set point shape ('circle' or 'square')
+- `setPointSizeType(type)` - Set size scaling ('fixed', 'attenuated', or 'adaptive')
+
+**Measurements**
+- `setMeasurementMode(mode)` - Set measurement mode ('none', 'distance', 'height', 'angle', 'radius', 'volume')
+- `getMeasurementMode()` - Get current measurement mode
+- `startMeasurement(type)` - Programmatically start a measurement
+- `finishMeasurement(id)` - Finish a measurement by ID
+- `getMeasurements()` - Get array of all measurement summaries
+- `removeMeasurement(id)` - Remove a specific measurement
+- `clearMeasurements()` - Clear all measurements
+
+**Advanced Access**
+- `getPotree()` - Get underlying Potree instance
+- `getScene()` - Get Three.js scene
+- `getCamera()` - Get Three.js camera
+- `getRenderer()` - Get Three.js WebGL renderer
+
+**Lifecycle**
+- `dispose()` - Clean up and free all resources
+
+---
+
+### Detailed Usage Examples
 
 #### Camera & View Control
 
@@ -248,19 +302,29 @@ viewer.setBackground('white');
 viewer.setBackground('#87CEEB');
 ```
 
-#### Point Coloring
+#### Point Appearance
 
 ```javascript
-import { PointColorType } from 'potree-viewer';
+import { PointColorType, PointSizeType, PointShape } from 'potree-core';
 
-// Set color mode
+// Point Color Mode
 viewer.setPointColorType(PointColorType.RGB);           // RGB colors (default)
 viewer.setPointColorType(PointColorType.CLASSIFICATION); // LAS classification
 viewer.setPointColorType(PointColorType.ELEVATION);     // Height-based gradient
 viewer.setPointColorType(PointColorType.INTENSITY);     // Intensity-based
+const colorType = viewer.getPointColorType();           // Get current color type
 
-// Get current color type
-const colorType = viewer.getPointColorType();
+// Point Size
+viewer.setPointSize(1.5);  // Set size in pixels (0.1 - 5.0)
+
+// Point Opacity
+viewer.setPointOpacity(0.8);  // Set opacity (0.0 - 1.0), default: 1.0
+
+// Point Shape
+viewer.setPointShape('circle');  // 'circle' or 'square'
+
+// Point Size Type (how size scales with distance)
+viewer.setPointSizeType('adaptive');  // 'fixed', 'attenuated', or 'adaptive'
 ```
 
 **Available PointColorType values:**
@@ -268,9 +332,12 @@ const colorType = viewer.getPointColorType();
 - `CLASSIFICATION` - LAS classification colors (ground=brown, vegetation=green)
 - `ELEVATION` - Height-based gradient
 - `INTENSITY` - Intensity-based colors
-- `DEPTH` - Distance from camera
-- `LOD` - Level of detail
+- `INTENSITY_GRADIENT` - Intensity with gradient colors
+- `RETURN_NUMBER` - LiDAR return number
+- `SOURCE` - Source ID
 - `NORMAL` - Surface normals
+- `LOD` - Level of detail
+- `DEPTH` - Distance from camera (if available)
 
 #### Measurements
 
@@ -294,7 +361,13 @@ viewer.clearMeasurements();
 
 // Get all measurements
 const measurements = viewer.getMeasurements();
-// Returns: [{ id, type, points, result }, ...]
+// Returns array of measurement summaries:
+// [{
+//   id: 'measurement-123',
+//   type: 'distance' | 'height' | 'angle' | 'radius' | 'volume',
+//   points: [{ x, y, z }, { x, y, z }, ...],
+//   result: { /* measurement-specific results */ }
+// }, ...]
 ```
 
 #### Advanced Access
@@ -351,6 +424,21 @@ console.dispose();
 
 ### Events
 
+The viewer uses an event system for notifications. Subscribe to events using `viewer.on(eventName, callback)` and unsubscribe with `viewer.off(eventName, callback)`.
+
+**Available Events:**
+- `ready` - Viewer initialized
+- `error` - Error occurred
+- `pointcloud-loaded` - Point cloud loaded successfully
+- `view-changed` - Camera position/target changed
+- `measurement-started` - New measurement created
+- `measurement-updated` - Point added to current measurement
+- `measurement-finished` - Measurement completed
+- `measurement-mode-changed` - Measurement mode changed
+- `measurements-cleared` - All measurements cleared
+- `color-type-changed` - Point color mode changed
+- `background-changed` - Background changed
+
 Subscribe to viewer events:
 
 ```javascript
@@ -376,22 +464,41 @@ viewer.on('view-changed', ({ namedView, position, target }) => {
 // Measurement events
 viewer.on('measurement-started', (measurement) => {
   console.log('Measurement started:', measurement.type);
+  // Payload: { id, type, points: [], result: {} }
+  // Note: measurement object is created but has no points yet
 });
 
 viewer.on('measurement-updated', (measurement) => {
-  console.log('Point added to measurement');
+  console.log('Point added:', measurement.points.length);
+  // Payload: { id, type, points: [{ x, y, z }, ...], result: {...} }
+  // Fired every time a point is added to the current measurement
 });
 
 viewer.on('measurement-finished', (measurement) => {
   console.log('Measurement complete:', measurement.result);
+  // Payload: { id, type, points: [{ x, y, z }, ...], result: {...} }
+  // Fired when measurement is completed (Enter key or required points reached)
 });
 
 viewer.on('measurement-mode-changed', (mode) => {
   console.log('Measurement mode:', mode);
+  // Payload: string - 'none' | 'distance' | 'height' | 'angle' | 'radius' | 'volume'
 });
 
-viewer.on('measurement-cleared', () => {
+viewer.on('measurements-cleared', () => {
   console.log('All measurements cleared');
+  // No payload
+});
+
+// Appearance events
+viewer.on('color-type-changed', (colorType) => {
+  console.log('Color type changed:', colorType);
+  // Payload: number - PointColorType enum value
+});
+
+viewer.on('background-changed', (background) => {
+  console.log('Background changed:', background);
+  // Payload: string - 'black' | 'white' | 'gradient' | 'skybox' | hex color
 });
 
 // Unsubscribe
@@ -399,6 +506,8 @@ viewer.off('ready', handler);
 ```
 
 ## Measurements
+
+All measurements are interactive - click on the point cloud to add measurement points. The Clear button (X) becomes enabled as soon as you add the first point and allows you to clear all measurements and exit measurement mode.
 
 ### Distance Measurement
 
@@ -408,7 +517,7 @@ Click multiple points to create line segments. Press **Enter** to finish or **ES
 // Start measurement
 viewer.setMeasurementMode('distance');
 
-// Result format
+// Result format from getMeasurements()
 {
   id: 'measurement-123',
   type: 'distance',
@@ -417,6 +526,7 @@ viewer.setMeasurementMode('distance');
     distanceTotal: 45.67  // Total distance in meters
   }
 }
+// Note: Internal measurement objects also have a 'finished' property
 ```
 
 ### Height Measurement
@@ -427,7 +537,7 @@ Click 2 points to measure vertical (Y-axis) difference.
 // Start measurement
 viewer.setMeasurementMode('height');
 
-// Result format
+// Result format from getMeasurements()
 {
   id: 'measurement-456',
   type: 'height',
@@ -438,36 +548,38 @@ viewer.setMeasurementMode('height');
     distance3D: 15.67     // 3D distance in meters
   }
 }
+// Automatically finishes after 2 points
 ```
 
 ### Angle Measurement
 
-Click 3 points to measure angle formed by the points.
+Click 3 points to measure angle formed by the points (vertex is the second point).
 
 ```javascript
 // Start measurement
 viewer.setMeasurementMode('angle');
 
-// Result format
+// Result format from getMeasurements()
 {
   id: 'measurement-789',
   type: 'angle',
   points: [{ x, y, z }, { x, y, z }, { x, y, z }],
   result: {
-    angle: 45.5  // Angle in degrees
+    angle: 45.5  // Angle in degrees (0-180)
   }
 }
+// Automatically finishes after 3 points
 ```
 
 ### Radius Measurement
 
-Click 3 points to calculate circle radius.
+Click 3 points to calculate circle radius that passes through all three points.
 
 ```javascript
 // Start measurement
 viewer.setMeasurementMode('radius');
 
-// Result format
+// Result format from getMeasurements()
 {
   id: 'measurement-abc',
   type: 'radius',
@@ -476,26 +588,35 @@ viewer.setMeasurementMode('radius');
     radius: 5.67  // Radius in meters
   }
 }
+// Automatically finishes after 3 points
 ```
 
 ### Volume Measurement
 
-Click multiple points to define polygon on ground, then specify height. Press **Enter** to finish.
+Click multiple points to define a polygon base, then add a height point. Press **Enter** to finish or **ESC** to cancel.
 
 ```javascript
 // Start measurement
 viewer.setMeasurementMode('volume');
 
-// Result format
+// Result format from getMeasurements()
 {
   id: 'measurement-def',
   type: 'volume',
   points: [{ x, y, z }, ...],
   result: {
-    volume: 123.45  // Volume in cubic meters
+    area: 234.56,        // Base area in square meters
+    volume: 123.45,      // Volume in cubic meters
+    height: 0.53         // Height in meters
   }
 }
+// Finished when Enter is pressed
 ```
+
+**Keyboard shortcuts for measurements:**
+- **ESC** - Cancel current measurement and exit measurement mode
+- **Enter** - Finish current measurement (for distance and volume)
+- **Right mouse button** - Rotate camera while in measurement mode
 
 ## Framework Integration
 
@@ -770,16 +891,19 @@ resolve: {
 }
 ```
 
-## Publishing
+## Current Status
 
-To publish this package to npm, see [PUBLISHING.md](./PUBLISHING.md) for detailed instructions.
-
-Quick publish:
-```bash
-cd viewer-lib
-npm login
-npm publish
-```
+This library is under active development. Current features:
+- ✅ Point cloud loading and rendering
+- ✅ 5 measurement types (Distance, Height, Angle, Radius, Volume)
+- ✅ Modern toolbar with dropdown menus
+- ✅ Console for measurement results
+- ✅ Multiple color modes
+- ✅ Named camera views
+- ✅ Point appearance controls (size, shape, size type)
+- ✅ Multiple background options
+- ✅ Event system for integrations
+- ⏳ Publishing to npm (planned)
 
 ## License
 

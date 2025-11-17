@@ -253,14 +253,51 @@ export class PotreeViewer extends EventEmitter {
   _setBackgroundInternal(background) {
     if (!this.scene) return;
 
+    // Clear existing fog
+    this.scene.fog = null;
+
     if (background === 'black') {
       this.scene.background = new THREE.Color(0x000000);
     } else if (background === 'white') {
       this.scene.background = new THREE.Color(0xffffff);
     } else if (background === 'gradient') {
-      // Simple gradient using fog effect
-      this.scene.background = new THREE.Color(0x87CEEB); // Sky blue
-      this.scene.fog = new THREE.Fog(0x87CEEB, 10, 1000);
+      // Create a proper gradient texture
+      const canvas = document.createElement('canvas');
+      canvas.width = 2;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      // Create gradient from dark blue (bottom) to light blue (top)
+      const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+      gradient.addColorStop(0, '#1a2332'); // Dark blue-gray bottom
+      gradient.addColorStop(0.5, '#4a6fa5'); // Mid blue
+      gradient.addColorStop(1, '#87CEEB'); // Sky blue top
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 2, 256);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      this.scene.background = texture;
+    } else if (background === 'skybox') {
+      // Create a simple skybox with procedural sky colors
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      // Create radial gradient for sky effect
+      const gradient = ctx.createRadialGradient(256, 400, 50, 256, 256, 512);
+      gradient.addColorStop(0, '#ffffff'); // Sun/bright center
+      gradient.addColorStop(0.3, '#87CEEB'); // Sky blue
+      gradient.addColorStop(0.7, '#4682B4'); // Steel blue
+      gradient.addColorStop(1, '#1e3a5f'); // Dark blue horizon
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 512, 512);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      this.scene.background = texture;
     } else if (typeof background === 'string') {
       // Assume it's a color string
       this.scene.background = new THREE.Color(background);
@@ -769,6 +806,73 @@ export class PotreeViewer extends EventEmitter {
     this._setBackgroundInternal(background);
     this.config.background = background;
     this.emit('background-changed', background);
+  }
+
+  /**
+   * Set point size
+   * @param {number} size - Point size (0.1 to 5.0)
+   */
+  setPointSize(size) {
+    for (const pco of this.pointClouds) {
+      if (pco.material) {
+        pco.material.size = size;
+      }
+    }
+  }
+
+  /**
+   * Set point opacity
+   * @param {number} opacity - Opacity value (0.0 to 1.0)
+   */
+  setPointOpacity(opacity) {
+    for (const pco of this.pointClouds) {
+      if (pco.material) {
+        pco.material.opacity = opacity;
+      }
+    }
+  }
+
+  /**
+   * Set point shape
+   * @param {string} shape - 'square' or 'circle'
+   */
+  setPointShape(shape) {
+    const PointShape = { SQUARE: 0, CIRCLE: 1 };
+    const shapeValue = shape === 'circle' ? PointShape.CIRCLE : PointShape.SQUARE;
+
+    for (const pco of this.pointClouds) {
+      if (pco.material) {
+        pco.material.shape = shapeValue;
+      }
+    }
+  }
+
+  /**
+   * Set point size type
+   * @param {string} sizeType - 'fixed', 'attenuated', or 'adaptive'
+   */
+  setPointSizeType(sizeType) {
+    const PointSizeType = { FIXED: 0, ATTENUATED: 1, ADAPTIVE: 2 };
+    let sizeTypeValue;
+
+    switch (sizeType) {
+      case 'fixed':
+        sizeTypeValue = PointSizeType.FIXED;
+        break;
+      case 'attenuated':
+        sizeTypeValue = PointSizeType.ATTENUATED;
+        break;
+      case 'adaptive':
+      default:
+        sizeTypeValue = PointSizeType.ADAPTIVE;
+        break;
+    }
+
+    for (const pco of this.pointClouds) {
+      if (pco.material) {
+        pco.material.pointSizeType = sizeTypeValue;
+      }
+    }
   }
 
   /**

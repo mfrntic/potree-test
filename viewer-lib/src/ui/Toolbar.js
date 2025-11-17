@@ -11,10 +11,13 @@ export class Toolbar {
     this.currentMeasurement = null;
     this.colorModeDropdown = null;
 
+    // Store all dropdowns for mutual exclusion
+    this.dropdowns = [];
+
     // SVG Icons from Lucide (https://lucide.dev) - MIT License
     const ICONS = {
       maximize: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>',
-      trash: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+      x: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
       ruler: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg>',
       moveVertical: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m8 18 4 4 4-4"/><path d="m8 6 4-4 4 4"/></svg>',
       triangle: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/></svg>',
@@ -28,6 +31,7 @@ export class Toolbar {
       chevronDown: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
       palette: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>',
       eye: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+      settings: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
     };
 
     // Color modes available (most commonly used from potree-core)
@@ -61,22 +65,27 @@ export class Toolbar {
       { id: 'bottom', label: 'Bottom View' },
     ];
 
-    // Default button groups
+    // Measurement options (for dropdown)
+    this.measurementOptions = [
+      { id: 'distance', label: 'Distance', icon: ICONS.ruler },
+      { id: 'height', label: 'Height', icon: ICONS.moveVertical },
+      { id: 'angle', label: 'Angle', icon: ICONS.triangle },
+      { id: 'radius', label: 'Radius', icon: ICONS.circleDot },
+      { id: 'volume', label: 'Volume', icon: ICONS.box },
+    ];
+
+    // Default button groups - reorganized: View → Measurements → Settings
     const defaultButtons = [
-      // Appearance dropdown (color modes + backgrounds)
-      { id: 'appearance', group: 'appearance', label: 'Appearance', icon: ICONS.palette, type: 'appearance-dropdown' },
+      // View controls (includes camera views, color modes, backgrounds)
+      { id: 'fit', group: 'view', label: 'Fit to Screen', icon: ICONS.maximize, action: () => this.viewer.fitToScreen() },
+      { id: 'view-selector', group: 'view', label: 'View & Appearance', icon: ICONS.eye, type: 'view-dropdown' },
 
       // Measurements
-      { id: 'distance', group: 'measurement', label: 'Distance', icon: ICONS.ruler, action: () => this._setMeasurementMode('distance') },
-      { id: 'height', group: 'measurement', label: 'Height', icon: ICONS.moveVertical, action: () => this._setMeasurementMode('height') },
-      { id: 'angle', group: 'measurement', label: 'Angle', icon: ICONS.triangle, action: () => this._setMeasurementMode('angle') },
-      { id: 'radius', group: 'measurement', label: 'Radius', icon: ICONS.circleDot, action: () => this._setMeasurementMode('radius') },
-      { id: 'volume', group: 'measurement', label: 'Volume', icon: ICONS.box, action: () => this._setMeasurementMode('volume') },
-      { id: 'clear', group: 'measurement', label: 'Clear Measurements', icon: ICONS.trash, action: () => this._clearMeasurements() },
+      { id: 'measurements', group: 'measurement', label: 'Measurements', icon: ICONS.ruler, type: 'measurements-dropdown' },
+      { id: 'clear', group: 'measurement', label: 'Clear Measurements', icon: ICONS.x, action: () => this._clearMeasurements() },
 
-      // Views - Fit to screen as button, rest as dropdown
-      { id: 'fit', group: 'view', label: 'Fit to Screen', icon: ICONS.maximize, action: () => this.viewer.fitToScreen() },
-      { id: 'view-selector', group: 'view', label: 'Views', icon: ICONS.eye, type: 'view-dropdown' },
+      // Settings
+      { id: 'settings', group: 'settings', label: 'Settings', icon: ICONS.settings, type: 'settings-dropdown' },
     ];
 
     this.options = {
@@ -191,6 +200,44 @@ export class Toolbar {
   }
 
   /**
+   * Close all dropdowns
+   * @private
+   */
+  _closeAllDropdowns() {
+    this.dropdowns.forEach(dropdown => {
+      if (dropdown && dropdown.menu) {
+        dropdown.menu.style.display = 'none';
+      }
+    });
+  }
+
+  /**
+   * Position dropdown menu to avoid overflow
+   * @private
+   */
+  _positionDropdown(menu, button) {
+    // Reset positioning
+    menu.style.left = '0';
+    menu.style.right = 'auto';
+
+    // Wait for next frame to get accurate measurements
+    requestAnimationFrame(() => {
+      const menuRect = menu.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+
+      // Check if menu overflows on the right side
+      const overflowRight = menuRect.right > viewportWidth;
+
+      if (overflowRight) {
+        // Align to right edge of button
+        menu.style.left = 'auto';
+        menu.style.right = '0';
+      }
+    });
+  }
+
+  /**
    * Clear all measurements
    * @private
    */
@@ -211,11 +258,14 @@ export class Toolbar {
    */
   _createButton(config) {
     // Handle different dropdown types
-    if (config.type === 'appearance-dropdown') {
-      return this._createAppearanceDropdown(config);
-    }
     if (config.type === 'view-dropdown') {
       return this._createViewDropdown(config);
+    }
+    if (config.type === 'measurements-dropdown') {
+      return this._createMeasurementsDropdown(config);
+    }
+    if (config.type === 'settings-dropdown') {
+      return this._createSettingsDropdown(config);
     }
 
     const button = document.createElement('button');
@@ -235,19 +285,28 @@ export class Toolbar {
 
     button.onclick = (e) => {
       e.stopPropagation();
-      config.action();
+      if (!button.disabled) {
+        config.action();
+      }
     };
+
+    // Store reference to clear button
+    if (config.id === 'clear') {
+      this.clearButton = button;
+      // Start disabled (no measurements initially)
+      button.disabled = true;
+    }
 
     return button;
   }
 
   /**
-   * Create appearance dropdown (color modes + backgrounds)
+   * Create settings dropdown with sliders and options
    * @private
    */
-  _createAppearanceDropdown(config) {
+  _createSettingsDropdown(config) {
     const container = document.createElement('div');
-    container.className = 'potree-appearance-dropdown';
+    container.className = 'potree-settings-dropdown';
     container.style.cssText = 'position: relative;';
 
     // Create dropdown button
@@ -262,157 +321,225 @@ export class Toolbar {
 
     // Create dropdown menu
     const menu = document.createElement('div');
-    menu.className = 'potree-dropdown-menu';
-    menu.style.cssText = `
-      display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      margin-top: 4px;
-      background: rgba(40, 44, 52, 0.95);
-      backdrop-filter: blur(8px);
-      border-radius: 6px;
-      padding: 6px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      min-width: 180px;
-      z-index: 10000;
-    `;
+    menu.className = 'potree-dropdown-menu settings-menu';
 
-    // Add section header for Color Modes
-    const colorHeader = document.createElement('div');
-    colorHeader.textContent = 'Point Color Mode';
-    colorHeader.style.cssText = `
-      padding: 6px 12px 4px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.5);
-      letter-spacing: 0.5px;
-    `;
-    menu.appendChild(colorHeader);
+    // Helper to create slider control
+    const createSlider = (label, min, max, step, defaultValue, onChange) => {
+      const sliderContainer = document.createElement('div');
+      sliderContainer.style.cssText = 'margin-bottom: 12px;';
 
-    // Add color mode options
-    this.colorModes.forEach(mode => {
-      const option = document.createElement('button');
-      option.className = 'potree-dropdown-option';
-      option.textContent = mode.label;
-      option.dataset.colorMode = mode.id;
-      option.style.cssText = `
-        display: block;
-        width: 100%;
-        padding: 8px 12px;
-        border: none;
-        background: transparent;
-        color: rgba(255, 255, 255, 0.85);
-        text-align: left;
-        cursor: pointer;
-        border-radius: 4px;
-        font-size: 13px;
-        transition: background 0.15s ease;
+      const labelRow = document.createElement('div');
+      labelRow.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
       `;
 
-      option.onclick = (e) => {
-        e.stopPropagation();
-        this.viewer.setPointColorType(mode.id);
-        menu.style.display = 'none';
-
-        // Update active state - only for color mode options
-        menu.querySelectorAll('[data-color-mode]').forEach(opt => {
-          opt.style.background = 'transparent';
-        });
-        option.style.background = 'rgba(52, 152, 219, 0.3)';
-      };
-
-      option.onmouseenter = () => {
-        if (option.style.background !== 'rgba(52, 152, 219, 0.3)') {
-          option.style.background = 'rgba(255, 255, 255, 0.1)';
-        }
-      };
-
-      option.onmouseleave = () => {
-        if (option.style.background !== 'rgba(52, 152, 219, 0.3)') {
-          option.style.background = 'transparent';
-        }
-      };
-
-      menu.appendChild(option);
-    });
-
-    // Add divider
-    const divider = document.createElement('div');
-    divider.style.cssText = `
-      height: 1px;
-      background: rgba(255, 255, 255, 0.1);
-      margin: 6px 0;
-    `;
-    menu.appendChild(divider);
-
-    // Add section header for Backgrounds
-    const bgHeader = document.createElement('div');
-    bgHeader.textContent = 'Background';
-    bgHeader.style.cssText = `
-      padding: 4px 12px 4px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.5);
-      letter-spacing: 0.5px;
-    `;
-    menu.appendChild(bgHeader);
-
-    // Add background options
-    this.backgrounds.forEach(bg => {
-      const option = document.createElement('button');
-      option.className = 'potree-dropdown-option';
-      option.textContent = bg.label;
-      option.dataset.background = bg.id;
-      option.style.cssText = `
-        display: block;
-        width: 100%;
-        padding: 8px 12px;
-        border: none;
-        background: transparent;
-        color: rgba(255, 255, 255, 0.85);
-        text-align: left;
-        cursor: pointer;
-        border-radius: 4px;
-        font-size: 13px;
-        transition: background 0.15s ease;
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = label;
+      labelSpan.style.cssText = `
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.7);
       `;
 
-      option.onclick = (e) => {
-        e.stopPropagation();
-        this.viewer.setBackground(bg.id);
-        menu.style.display = 'none';
+      const valueSpan = document.createElement('span');
+      valueSpan.textContent = defaultValue;
+      valueSpan.style.cssText = `
+        font-size: 12px;
+        color: rgba(52, 152, 219, 1);
+        font-weight: 600;
+      `;
 
-        // Update active state - only for background options
-        menu.querySelectorAll('[data-background]').forEach(opt => {
-          opt.style.background = 'transparent';
-        });
-        option.style.background = 'rgba(52, 152, 219, 0.3)';
+      labelRow.appendChild(labelSpan);
+      labelRow.appendChild(valueSpan);
+
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = min;
+      slider.max = max;
+      slider.step = step;
+      slider.value = defaultValue;
+      slider.style.cssText = `
+        width: 100%;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        outline: none;
+        border-radius: 2px;
+        -webkit-appearance: none;
+      `;
+
+      // Custom thumb styles
+      const styleSheet = document.styleSheets[0];
+      if (!document.getElementById('slider-thumb-styles')) {
+        const style = document.createElement('style');
+        style.id = 'slider-thumb-styles';
+        style.textContent = `
+          input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+          }
+          input[type="range"]::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      slider.oninput = (e) => {
+        const value = parseFloat(e.target.value);
+        valueSpan.textContent = value.toFixed(step < 1 ? 2 : 0);
+        onChange(value);
       };
 
-      option.onmouseenter = () => {
-        if (option.style.background !== 'rgba(52, 152, 219, 0.3)') {
-          option.style.background = 'rgba(255, 255, 255, 0.1)';
+      sliderContainer.appendChild(labelRow);
+      sliderContainer.appendChild(slider);
+
+      return { container: sliderContainer, slider, valueSpan };
+    };
+
+    // Helper to create dropdown select
+    const createSelect = (label, options, defaultValue, onChange) => {
+      const selectContainer = document.createElement('div');
+      selectContainer.style.cssText = 'margin-bottom: 12px;';
+
+      const labelSpan = document.createElement('div');
+      labelSpan.textContent = label;
+      labelSpan.style.cssText = `
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.7);
+        margin-bottom: 6px;
+      `;
+
+      const select = document.createElement('select');
+      select.style.cssText = `
+        width: 100%;
+        padding: 6px 8px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 12px;
+        cursor: pointer;
+        outline: none;
+      `;
+
+      options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        option.style.cssText = 'background: #2c3e50; color: white;';
+        if (opt.value === defaultValue) {
+          option.selected = true;
         }
+        select.appendChild(option);
+      });
+
+      select.onchange = (e) => {
+        onChange(e.target.value);
       };
 
-      option.onmouseleave = () => {
-        if (option.style.background !== 'rgba(52, 152, 219, 0.3)') {
-          option.style.background = 'transparent';
-        }
-      };
+      selectContainer.appendChild(labelSpan);
+      selectContainer.appendChild(select);
 
-      menu.appendChild(option);
+      return { container: selectContainer, select };
+    };
+
+    // Get current material settings
+    const getMaterial = () => {
+      if (this.viewer.pointClouds && this.viewer.pointClouds.length > 0) {
+        return this.viewer.pointClouds[0].material;
+      }
+      return null;
+    };
+
+    // Get initial values (might be null if point cloud not loaded yet)
+    const material = getMaterial();
+    const defaultSize = material ? material.size : 0.6;
+
+    // Determine current shape (SQUARE=0, CIRCLE=1)
+    const currentShape = material && material.shape === 1 ? 'circle' : 'square';
+
+    // Determine current size type (FIXED=0, ATTENUATED=1, ADAPTIVE=2)
+    let currentSizeType = 'fixed';
+    if (material) {
+      if (material.pointSizeType === 1) currentSizeType = 'attenuated';
+      else if (material.pointSizeType === 2) currentSizeType = 'adaptive';
+    }
+
+    // Point Size slider - will be updated when dropdown opens
+    const sizeControl = createSlider('Point Size', 0.1, 5.0, 0.1, defaultSize, (value) => {
+      this.viewer.setPointSize(value);
     });
+    menu.appendChild(sizeControl.container);
+
+    // Point Shape dropdown
+    const shapeControl = createSelect('Point Shape', [
+      { value: 'square', label: 'Square' },
+      { value: 'circle', label: 'Circle' }
+    ], currentShape, (value) => {
+      this.viewer.setPointShape(value);
+    });
+    menu.appendChild(shapeControl.container);
+
+    // Point Size Type dropdown
+    const sizeTypeControl = createSelect('Point Size Type', [
+      { value: 'fixed', label: 'Fixed' },
+      { value: 'attenuated', label: 'Attenuated' },
+      { value: 'adaptive', label: 'Adaptive' }
+    ], currentSizeType, (value) => {
+      this.viewer.setPointSizeType(value);
+    });
+    menu.appendChild(sizeTypeControl.container);
+
+    // Prevent dropdown from closing when clicking inside
+    menu.onclick = (e) => {
+      e.stopPropagation();
+    };
 
     // Toggle dropdown on button click
     button.onclick = (e) => {
       e.stopPropagation();
       const isVisible = menu.style.display === 'block';
+
+      // Close all other dropdowns first
+      this._closeAllDropdowns();
+
+      // Then toggle this one
       menu.style.display = isVisible ? 'none' : 'block';
+
+      // Update all controls with current values when opening
+      if (!isVisible) {
+        const mat = getMaterial();
+        if (mat) {
+          // Update size slider
+          sizeControl.slider.value = mat.size;
+          sizeControl.valueSpan.textContent = mat.size.toFixed(1);
+
+          // Update shape dropdown (SQUARE=0, CIRCLE=1)
+          shapeControl.select.value = mat.shape === 1 ? 'circle' : 'square';
+
+          // Update size type dropdown (FIXED=0, ATTENUATED=1, ADAPTIVE=2)
+          let sizeTypeValue = 'fixed';
+          if (mat.pointSizeType === 1) sizeTypeValue = 'attenuated';
+          else if (mat.pointSizeType === 2) sizeTypeValue = 'adaptive';
+          sizeTypeControl.select.value = sizeTypeValue;
+        }
+
+        // Position dropdown intelligently
+        this._positionDropdown(menu, button);
+      }
     };
 
     // Close dropdown when clicking outside
@@ -424,7 +551,8 @@ export class Toolbar {
     container.appendChild(menu);
 
     // Store reference
-    this.appearanceDropdown = { container, menu, button };
+    this.settingsDropdown = { container, menu, button, sizeControl };
+    this.dropdowns.push(this.settingsDropdown);
 
     return container;
   }
@@ -450,22 +578,13 @@ export class Toolbar {
 
     // Create dropdown menu
     const menu = document.createElement('div');
-    menu.className = 'potree-dropdown-menu';
-    menu.style.cssText = `
-      display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      margin-top: 4px;
-      background: rgba(40, 44, 52, 0.95);
-      backdrop-filter: blur(8px);
-      border-radius: 6px;
-      padding: 4px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      min-width: 140px;
-      z-index: 10000;
-    `;
+    menu.className = 'potree-dropdown-menu view-menu';
+
+    // Add section header for Views
+    const viewHeader = document.createElement('div');
+    viewHeader.className = 'potree-dropdown-header';
+    viewHeader.textContent = 'Camera Views';
+    menu.appendChild(viewHeader);
 
     // Add view options
     this.viewOptions.forEach(view => {
@@ -473,19 +592,6 @@ export class Toolbar {
       option.className = 'potree-dropdown-option';
       option.textContent = view.label;
       option.dataset.view = view.id;
-      option.style.cssText = `
-        display: block;
-        width: 100%;
-        padding: 8px 12px;
-        border: none;
-        background: transparent;
-        color: rgba(255, 255, 255, 0.85);
-        text-align: left;
-        cursor: pointer;
-        border-radius: 4px;
-        font-size: 13px;
-        transition: background 0.15s ease;
-      `;
 
       option.onclick = (e) => {
         e.stopPropagation();
@@ -493,12 +599,70 @@ export class Toolbar {
         menu.style.display = 'none';
       };
 
-      option.onmouseenter = () => {
-        option.style.background = 'rgba(255, 255, 255, 0.1)';
+      menu.appendChild(option);
+    });
+
+    // Add divider
+    const divider1 = document.createElement('div');
+    divider1.className = 'potree-dropdown-divider';
+    menu.appendChild(divider1);
+
+    // Add section header for Color Modes
+    const colorHeader = document.createElement('div');
+    colorHeader.className = 'potree-dropdown-header';
+    colorHeader.textContent = 'Point Color Mode';
+    menu.appendChild(colorHeader);
+
+    // Add color mode options
+    this.colorModes.forEach(mode => {
+      const option = document.createElement('button');
+      option.className = 'potree-dropdown-option';
+      option.textContent = mode.label;
+      option.dataset.colorMode = mode.id;
+
+      option.onclick = (e) => {
+        e.stopPropagation();
+        this.viewer.setPointColorType(mode.id);
+        menu.style.display = 'none';
+
+        // Update active state - only for color mode options
+        menu.querySelectorAll('[data-color-mode]').forEach(opt => {
+          opt.classList.remove('active');
+        });
+        option.classList.add('active');
       };
 
-      option.onmouseleave = () => {
-        option.style.background = 'transparent';
+      menu.appendChild(option);
+    });
+
+    // Add divider
+    const divider2 = document.createElement('div');
+    divider2.className = 'potree-dropdown-divider';
+    menu.appendChild(divider2);
+
+    // Add section header for Backgrounds
+    const bgHeader = document.createElement('div');
+    bgHeader.className = 'potree-dropdown-header';
+    bgHeader.textContent = 'Background';
+    menu.appendChild(bgHeader);
+
+    // Add background options
+    this.backgrounds.forEach(bg => {
+      const option = document.createElement('button');
+      option.className = 'potree-dropdown-option';
+      option.textContent = bg.label;
+      option.dataset.background = bg.id;
+
+      option.onclick = (e) => {
+        e.stopPropagation();
+        this.viewer.setBackground(bg.id);
+        menu.style.display = 'none';
+
+        // Update active state - only for background options
+        menu.querySelectorAll('[data-background]').forEach(opt => {
+          opt.classList.remove('active');
+        });
+        option.classList.add('active');
       };
 
       menu.appendChild(option);
@@ -508,7 +672,17 @@ export class Toolbar {
     button.onclick = (e) => {
       e.stopPropagation();
       const isVisible = menu.style.display === 'block';
+
+      // Close all other dropdowns first
+      this._closeAllDropdowns();
+
+      // Then toggle this one
       menu.style.display = isVisible ? 'none' : 'block';
+
+      // Position dropdown intelligently
+      if (!isVisible) {
+        this._positionDropdown(menu, button);
+      }
     };
 
     // Close dropdown when clicking outside
@@ -521,6 +695,90 @@ export class Toolbar {
 
     // Store reference
     this.viewDropdown = { container, menu, button };
+    this.dropdowns.push(this.viewDropdown);
+
+    return container;
+  }
+
+  /**
+   * Create measurements dropdown
+   * @private
+   */
+  _createMeasurementsDropdown(config) {
+    const container = document.createElement('div');
+    container.className = 'potree-measurements-dropdown';
+    container.style.cssText = 'position: relative;';
+
+    // Create dropdown button
+    const button = document.createElement('button');
+    button.className = 'potree-toolbar-button';
+    button.title = config.label;
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'potree-button-icon';
+    iconSpan.innerHTML = config.icon;
+    button.appendChild(iconSpan);
+
+    // Create dropdown menu
+    const menu = document.createElement('div');
+    menu.className = 'potree-dropdown-menu measurements-menu';
+
+    // Add section header
+    const header = document.createElement('div');
+    header.className = 'potree-dropdown-header';
+    header.textContent = 'Measurements';
+    menu.appendChild(header);
+
+    // Add measurement options
+    this.measurementOptions.forEach(measurement => {
+      const option = document.createElement('button');
+      option.className = 'potree-dropdown-option';
+      option.textContent = measurement.label;
+      option.dataset.measurement = measurement.id;
+
+      option.onclick = (e) => {
+        e.stopPropagation();
+        this._setMeasurementMode(measurement.id);
+        menu.style.display = 'none';
+
+        // Update active state
+        menu.querySelectorAll('[data-measurement]').forEach(opt => {
+          opt.classList.remove('active');
+        });
+        option.classList.add('active');
+      };
+
+      menu.appendChild(option);
+    });
+
+    // Toggle dropdown on button click
+    button.onclick = (e) => {
+      e.stopPropagation();
+      const isVisible = menu.style.display === 'block';
+
+      // Close all other dropdowns first
+      this._closeAllDropdowns();
+
+      // Then toggle this one
+      menu.style.display = isVisible ? 'none' : 'block';
+
+      // Position dropdown intelligently
+      if (!isVisible) {
+        this._positionDropdown(menu, button);
+      }
+    };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+      menu.style.display = 'none';
+    });
+
+    container.appendChild(button);
+    container.appendChild(menu);
+
+    // Store reference
+    this.measurementsDropdown = { container, menu, button };
+    this.dropdowns.push(this.measurementsDropdown);
 
     return container;
   }
@@ -533,10 +791,31 @@ export class Toolbar {
     // Update button states when measurement mode changes
     this.viewer.on('measurement-started', (measurement) => {
       this._updateButtonStates(measurement.type);
+      this._updateMeasurementsDropdown(measurement.type);
+      this._updateClearButtonState();
     });
 
     this.viewer.on('measurement-mode-changed', (mode) => {
       this._updateButtonStates(mode);
+      this._updateMeasurementsDropdown(mode);
+    });
+
+    // Update clear button state when measurements change
+    this.viewer.on('measurement-added', () => {
+      this._updateClearButtonState();
+    });
+
+    this.viewer.on('measurement-removed', () => {
+      this._updateClearButtonState();
+    });
+
+    this.viewer.on('measurements-cleared', () => {
+      this._updateClearButtonState();
+    });
+
+    // Enable clear button as soon as user adds a point to any measurement
+    this.viewer.on('measurement-updated', () => {
+      this._updateClearButtonState();
     });
 
     // Update appearance dropdown when color type changes
@@ -550,6 +829,9 @@ export class Toolbar {
       if (currentColorType !== undefined) {
         this._updateAppearanceDropdown(currentColorType);
       }
+
+      // Also update settings dropdown with actual material values
+      this._updateSettingsDropdown();
     });
 
     // Update appearance dropdown when background changes
@@ -574,41 +856,94 @@ export class Toolbar {
   }
 
   /**
-   * Update appearance dropdown to highlight active color type
+   * Update view dropdown to highlight active color type
    * @private
    */
   _updateAppearanceDropdown(colorType) {
-    if (!this.appearanceDropdown || !this.appearanceDropdown.menu) {
+    if (!this.viewDropdown || !this.viewDropdown.menu) {
       return;
     }
 
-    const options = this.appearanceDropdown.menu.querySelectorAll('[data-color-mode]');
+    const options = this.viewDropdown.menu.querySelectorAll('[data-color-mode]');
     options.forEach(option => {
       if (parseInt(option.dataset.colorMode) === colorType) {
-        option.style.background = 'rgba(52, 152, 219, 0.3)';
+        option.classList.add('active');
       } else {
-        option.style.background = 'transparent';
+        option.classList.remove('active');
       }
     });
   }
 
   /**
-   * Update appearance dropdown to highlight active background
+   * Update view dropdown to highlight active background
    * @private
    */
   _updateBackgroundSelection(background) {
-    if (!this.appearanceDropdown || !this.appearanceDropdown.menu) {
+    if (!this.viewDropdown || !this.viewDropdown.menu) {
       return;
     }
 
-    const options = this.appearanceDropdown.menu.querySelectorAll('[data-background]');
+    const options = this.viewDropdown.menu.querySelectorAll('[data-background]');
     options.forEach(option => {
       if (option.dataset.background === background) {
-        option.style.background = 'rgba(52, 152, 219, 0.3)';
+        option.classList.add('active');
       } else {
-        option.style.background = 'transparent';
+        option.classList.remove('active');
       }
     });
+  }
+
+  /**
+   * Update settings dropdown with current material values
+   * @private
+   */
+  _updateSettingsDropdown() {
+    if (!this.settingsDropdown || !this.settingsDropdown.sizeControl) {
+      return;
+    }
+
+    // Get current material
+    const material = this.viewer.pointClouds?.[0]?.material;
+    if (!material) {
+      return;
+    }
+
+    // Update size slider display (but not the actual slider value yet - will update when opened)
+    this.settingsDropdown.sizeControl.valueSpan.textContent = material.size.toFixed(1);
+  }
+
+  /**
+   * Update measurements dropdown to highlight active measurement type
+   * @private
+   */
+  _updateMeasurementsDropdown(measurementType) {
+    if (!this.measurementsDropdown || !this.measurementsDropdown.menu) {
+      return;
+    }
+
+    const options = this.measurementsDropdown.menu.querySelectorAll('[data-measurement]');
+    options.forEach(option => {
+      if (option.dataset.measurement === measurementType) {
+        option.classList.add('active');
+      } else {
+        option.classList.remove('active');
+      }
+    });
+  }
+
+  /**
+   * Update clear button disabled state based on measurements
+   * @private
+   */
+  _updateClearButtonState() {
+    if (!this.clearButton) {
+      return;
+    }
+
+    // Check if there are any measurements with at least one point
+    const measurements = this.viewer.getMeasurements();
+    const hasMeasurements = measurements && measurements.some(m => m.points && m.points.length > 0);
+    this.clearButton.disabled = !hasMeasurements;
   }
 
   /**
@@ -671,6 +1006,12 @@ export class Toolbar {
         background: #2980b9;
       }
 
+      .potree-toolbar-button:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+
       .potree-button-icon {
         display: flex;
         align-items: center;
@@ -684,6 +1025,79 @@ export class Toolbar {
         height: 20px;
         stroke: currentColor;
         stroke-width: 1.8;
+      }
+
+      /* Dropdown menu styles */
+      .potree-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0; 
+        background: rgba(40, 44, 52, 0.95);
+        backdrop-filter: blur(8px);
+        border-radius: 6px;
+        padding: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        min-width: 140px;
+        z-index: 10000; 
+        margin-left: -3px;
+        margin-top: 10px;
+      }
+
+      .potree-dropdown-menu.settings-menu {
+        min-width: 240px;
+        padding: 8px;
+      }
+
+      .potree-dropdown-menu.measurements-menu {
+        min-width: 140px;
+        padding: 4px;
+      }
+
+      .potree-dropdown-menu.view-menu {
+        min-width: 200px;
+        padding: 4px;
+      }
+
+      /* Dropdown option buttons */
+      .potree-dropdown-option {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.85);
+        text-align: left;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 13px;
+        transition: background 0.15s ease;
+      }
+
+      .potree-dropdown-option:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .potree-dropdown-option.active {
+        background: rgba(52, 152, 219, 0.3);
+      }
+
+      /* Dropdown section headers */
+      .potree-dropdown-header {
+        padding: 6px 12px 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.5);
+        letter-spacing: 0.5px;
+      }
+
+      /* Dropdown divider */
+      .potree-dropdown-divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+        margin: 6px 0;
       }
     `;
     document.head.appendChild(style);

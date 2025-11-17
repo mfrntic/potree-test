@@ -94,6 +94,8 @@ export class PotreeViewer extends EventEmitter {
 
       // Set background
       this._setBackgroundInternal(this.config.background);
+      // Emit event for toolbar initialization
+      this.emit('background-changed', this.config.background);
 
       // Create a completely separate scene for measurements (overlay approach)
       // This ensures measurements are never affected by Potree transformations
@@ -312,6 +314,33 @@ export class PotreeViewer extends EventEmitter {
       // Update matrix to ensure transformations are applied
       pco.updateMatrixWorld(true);
 
+      // CRITICAL FIX: Potree shader uses world.z for elevation, but after rotation Y is vertical
+      // After -90° X rotation: original bbox.z becomes world.y
+      // So we need to set heightMin/Max based on the original Z range
+      if (pco.boundingBox) {
+        // Original Z range (before rotation) becomes Y range (after rotation)
+        const bbox = pco.boundingBox;
+
+        // Transform bounding box corners to get world space range
+        const corners = [
+          new THREE.Vector3(bbox.min.x, bbox.min.y, bbox.min.z),
+          new THREE.Vector3(bbox.max.x, bbox.max.y, bbox.max.z),
+        ];
+
+        corners.forEach(c => c.applyMatrix4(pco.matrixWorld));
+
+        const worldMinY = Math.min(corners[0].y, corners[1].y);
+        const worldMaxY = Math.max(corners[0].y, corners[1].y);
+
+        pco.material.heightMin = worldMinY;
+        pco.material.heightMax = worldMaxY;
+
+        console.log('[PotreeViewer] Adjusted height range for Y-up orientation:', {
+          originalZ: { min: bbox.min.z, max: bbox.max.z },
+          worldY: { min: worldMinY, max: worldMaxY }
+        });
+      }
+
       // Set OrbitControls target to the center of the point cloud
       // This ensures rotation happens around the object center
       const { center } = this._getPointCloudWorldBounds(pco);
@@ -349,6 +378,9 @@ export class PotreeViewer extends EventEmitter {
           console.warn('[PotreeViewer] new_format uses RGBA attribute directly from geometry');
           console.warn('[PotreeViewer] pointColorType will be IGNORED - color modes won\'t work!');
         }
+
+        // Patch shader for Y-up elevation (since we rotated point cloud -90° around X)
+        this._patchShaderForYUpElevation(pco.material);
       }
 
       // Set color encoding for proper color display
@@ -736,6 +768,50 @@ export class PotreeViewer extends EventEmitter {
   setBackground(background) {
     this._setBackgroundInternal(background);
     this.config.background = background;
+    this.emit('background-changed', background);
+  }
+
+  /**
+   * Patch shader to use world.y instead of world.z for elevation calculations
+   * This is necessary because we rotate point clouds -90° around X-axis to make Y-up,
+   * but potree-core shaders hardcoded use world.z for elevation.
+   * @private
+   */
+  _patchShaderForYUpElevation(material) {
+    if (!material.vertexShader) {
+      return;
+    }
+
+    const originalShader = material.vertexShader;
+
+    // Pattern 1: Direct world.z usage in elevation calculation
+    material.vertexShader = material.vertexShader.replace(
+      /(world\.z\s*-\s*heightMin)/g,
+      'world.y - heightMin'
+    );
+
+    // Pattern 2: Replace world.z in getElevation function if it exists
+    const elevationFunctionMatch = material.vertexShader.match(
+      /vec3\s+getElevation\s*\([^)]*\)\s*\{[^}]*\}/s
+    );
+
+    if (elevationFunctionMatch) {
+      const originalFunction = elevationFunctionMatch[0];
+      const patchedFunction = originalFunction.replace(/world\.z/g, 'world.y');
+      material.vertexShader = material.vertexShader.replace(
+        originalFunction,
+        patchedFunction
+      );
+    }
+
+    const wasPatched = originalShader !== material.vertexShader;
+
+    if (wasPatched) {
+      console.log('[PotreeViewer] ✓ Patched shader for Y-up elevation:', {
+        hasGetElevation: !!elevationFunctionMatch,
+        patchedSuccessfully: true
+      });
+    }
   }
 
   /**
@@ -761,6 +837,19 @@ export class PotreeViewer extends EventEmitter {
 
         // CRITICAL FIX: Must clear WebGL cache BEFORE regenerating shader source!
         // The order is crucial: delete cache → set color type → regenerate shader → render
+
+        // Step 0: Save important material properties before dispose
+        const savedProps = {
+          heightMin: pco.material.heightMin,
+          heightMax: pco.material.heightMax,
+          gradient: pco.material.gradient,
+          classification: pco.material.classification,
+          intensityRange: [...pco.material.intensityRange],
+          size: pco.material.size,
+          minSize: pco.material.minSize,
+          maxSize: pco.material.maxSize,
+          opacity: pco.material.opacity,
+        };
 
         // Step 1: Fully dispose material to clear ALL WebGL state
         // This prevents "uniform location not from associated program" errors
@@ -808,6 +897,9 @@ export class PotreeViewer extends EventEmitter {
         if (typeof pco.material.updateShaderSource === 'function') {
           pco.material.updateShaderSource();
 
+          // CRITICAL FIX: Patch shader to use world.y instead of world.z for elevation
+          this._patchShaderForYUpElevation(pco.material);
+
           // Verify shader was regenerated correctly
           const hasNewFormat = pco.material.vertexShader?.includes('#define new_format');
           const colorTypeDefine = pco.material.vertexShader?.match(/#define color_type_\w+/)?.[0];
@@ -830,6 +922,35 @@ export class PotreeViewer extends EventEmitter {
         } else {
           console.error('[PotreeViewer] ⚠️  updateShaderSource() does not exist!');
         }
+
+        // Step 5: Restore important material properties that were lost during dispose
+        pco.material.gradient = savedProps.gradient;
+        pco.material.classification = savedProps.classification;
+        pco.material.intensityRange = savedProps.intensityRange;
+        pco.material.size = savedProps.size;
+        pco.material.minSize = savedProps.minSize;
+        pco.material.maxSize = savedProps.maxSize;
+        pco.material.opacity = savedProps.opacity;
+
+        // CRITICAL: Recalculate heightMin/Max for rotated point cloud
+        // Don't use saved values - they might be wrong for rotated orientation
+        if (pco.boundingBox) {
+          const bbox = pco.boundingBox;
+          const corners = [
+            new THREE.Vector3(bbox.min.x, bbox.min.y, bbox.min.z),
+            new THREE.Vector3(bbox.max.x, bbox.max.y, bbox.max.z),
+          ];
+          corners.forEach(c => c.applyMatrix4(pco.matrixWorld));
+
+          pco.material.heightMin = Math.min(corners[0].y, corners[1].y);
+          pco.material.heightMax = Math.max(corners[0].y, corners[1].y);
+        }
+
+        console.log('[PotreeViewer] ✓ Restored material properties:', {
+          heightMin: pco.material.heightMin,
+          heightMax: pco.material.heightMax,
+          hasGradient: !!savedProps.gradient
+        });
 
         console.log('[PotreeViewer] ✅ Changed color type from', oldType, 'to', colorType);
         console.log('[PotreeViewer] Shader has color_type:',

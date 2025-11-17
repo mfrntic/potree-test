@@ -27,6 +27,7 @@ export class Toolbar {
       chevronUp: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>',
       chevronDown: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
       palette: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>',
+      eye: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
     };
 
     // Color modes available (most commonly used from potree-core)
@@ -42,10 +43,28 @@ export class Toolbar {
       { id: PointColorType.LOD, label: 'Level of Detail' },
     ];
 
+    // Background options
+    this.backgrounds = [
+      { id: 'black', label: 'Black' },
+      { id: 'white', label: 'White' },
+      { id: 'gradient', label: 'Gradient' },
+      { id: 'skybox', label: 'Skybox' },
+    ];
+
+    // View options (for dropdown)
+    this.viewOptions = [
+      { id: 'left', label: 'Left View' },
+      { id: 'right', label: 'Right View' },
+      { id: 'front', label: 'Front View' },
+      { id: 'back', label: 'Back View' },
+      { id: 'top', label: 'Top View' },
+      { id: 'bottom', label: 'Bottom View' },
+    ];
+
     // Default button groups
     const defaultButtons = [
-      // Color mode selector
-      { id: 'color-mode', group: 'color', label: 'Color Mode', icon: ICONS.palette, type: 'dropdown' },
+      // Appearance dropdown (color modes + backgrounds)
+      { id: 'appearance', group: 'appearance', label: 'Appearance', icon: ICONS.palette, type: 'appearance-dropdown' },
 
       // Measurements
       { id: 'distance', group: 'measurement', label: 'Distance', icon: ICONS.ruler, action: () => this._setMeasurementMode('distance') },
@@ -55,14 +74,9 @@ export class Toolbar {
       { id: 'volume', group: 'measurement', label: 'Volume', icon: ICONS.box, action: () => this._setMeasurementMode('volume') },
       { id: 'clear', group: 'measurement', label: 'Clear Measurements', icon: ICONS.trash, action: () => this._clearMeasurements() },
 
-      // Views
+      // Views - Fit to screen as button, rest as dropdown
       { id: 'fit', group: 'view', label: 'Fit to Screen', icon: ICONS.maximize, action: () => this.viewer.fitToScreen() },
-      { id: 'view-left', group: 'view', label: 'Left View', icon: ICONS.arrowLeft, action: () => this.viewer.setNamedView('left') },
-      { id: 'view-right', group: 'view', label: 'Right View', icon: ICONS.arrowRight, action: () => this.viewer.setNamedView('right') },
-      { id: 'view-front', group: 'view', label: 'Front View', icon: ICONS.arrowDown, action: () => this.viewer.setNamedView('front') },
-      { id: 'view-back', group: 'view', label: 'Back View', icon: ICONS.arrowUp, action: () => this.viewer.setNamedView('back') },
-      { id: 'view-top', group: 'view', label: 'Top View', icon: ICONS.chevronUp, action: () => this.viewer.setNamedView('top') },
-      { id: 'view-bottom', group: 'view', label: 'Bottom View', icon: ICONS.chevronDown, action: () => this.viewer.setNamedView('bottom') },
+      { id: 'view-selector', group: 'view', label: 'Views', icon: ICONS.eye, type: 'view-dropdown' },
     ];
 
     this.options = {
@@ -196,9 +210,12 @@ export class Toolbar {
    * @private
    */
   _createButton(config) {
-    // Handle dropdown type buttons differently
-    if (config.type === 'dropdown') {
-      return this._createColorModeDropdown(config);
+    // Handle different dropdown types
+    if (config.type === 'appearance-dropdown') {
+      return this._createAppearanceDropdown(config);
+    }
+    if (config.type === 'view-dropdown') {
+      return this._createViewDropdown(config);
     }
 
     const button = document.createElement('button');
@@ -225,12 +242,12 @@ export class Toolbar {
   }
 
   /**
-   * Create color mode dropdown
+   * Create appearance dropdown (color modes + backgrounds)
    * @private
    */
-  _createColorModeDropdown(config) {
+  _createAppearanceDropdown(config) {
     const container = document.createElement('div');
-    container.className = 'potree-color-dropdown';
+    container.className = 'potree-appearance-dropdown';
     container.style.cssText = 'position: relative;';
 
     // Create dropdown button
@@ -255,12 +272,25 @@ export class Toolbar {
       background: rgba(40, 44, 52, 0.95);
       backdrop-filter: blur(8px);
       border-radius: 6px;
-      padding: 4px;
+      padding: 6px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       border: 1px solid rgba(255, 255, 255, 0.1);
-      min-width: 160px;
+      min-width: 180px;
       z-index: 10000;
     `;
+
+    // Add section header for Color Modes
+    const colorHeader = document.createElement('div');
+    colorHeader.textContent = 'Point Color Mode';
+    colorHeader.style.cssText = `
+      padding: 6px 12px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.5);
+      letter-spacing: 0.5px;
+    `;
+    menu.appendChild(colorHeader);
 
     // Add color mode options
     this.colorModes.forEach(mode => {
@@ -287,8 +317,77 @@ export class Toolbar {
         this.viewer.setPointColorType(mode.id);
         menu.style.display = 'none';
 
-        // Update active state
-        menu.querySelectorAll('.potree-dropdown-option').forEach(opt => {
+        // Update active state - only for color mode options
+        menu.querySelectorAll('[data-color-mode]').forEach(opt => {
+          opt.style.background = 'transparent';
+        });
+        option.style.background = 'rgba(52, 152, 219, 0.3)';
+      };
+
+      option.onmouseenter = () => {
+        if (option.style.background !== 'rgba(52, 152, 219, 0.3)') {
+          option.style.background = 'rgba(255, 255, 255, 0.1)';
+        }
+      };
+
+      option.onmouseleave = () => {
+        if (option.style.background !== 'rgba(52, 152, 219, 0.3)') {
+          option.style.background = 'transparent';
+        }
+      };
+
+      menu.appendChild(option);
+    });
+
+    // Add divider
+    const divider = document.createElement('div');
+    divider.style.cssText = `
+      height: 1px;
+      background: rgba(255, 255, 255, 0.1);
+      margin: 6px 0;
+    `;
+    menu.appendChild(divider);
+
+    // Add section header for Backgrounds
+    const bgHeader = document.createElement('div');
+    bgHeader.textContent = 'Background';
+    bgHeader.style.cssText = `
+      padding: 4px 12px 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.5);
+      letter-spacing: 0.5px;
+    `;
+    menu.appendChild(bgHeader);
+
+    // Add background options
+    this.backgrounds.forEach(bg => {
+      const option = document.createElement('button');
+      option.className = 'potree-dropdown-option';
+      option.textContent = bg.label;
+      option.dataset.background = bg.id;
+      option.style.cssText = `
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.85);
+        text-align: left;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 13px;
+        transition: background 0.15s ease;
+      `;
+
+      option.onclick = (e) => {
+        e.stopPropagation();
+        this.viewer.setBackground(bg.id);
+        menu.style.display = 'none';
+
+        // Update active state - only for background options
+        menu.querySelectorAll('[data-background]').forEach(opt => {
           opt.style.background = 'transparent';
         });
         option.style.background = 'rgba(52, 152, 219, 0.3)';
@@ -325,7 +424,103 @@ export class Toolbar {
     container.appendChild(menu);
 
     // Store reference
-    this.colorModeDropdown = { container, menu, button };
+    this.appearanceDropdown = { container, menu, button };
+
+    return container;
+  }
+
+  /**
+   * Create view dropdown
+   * @private
+   */
+  _createViewDropdown(config) {
+    const container = document.createElement('div');
+    container.className = 'potree-view-dropdown';
+    container.style.cssText = 'position: relative;';
+
+    // Create dropdown button
+    const button = document.createElement('button');
+    button.className = 'potree-toolbar-button';
+    button.title = config.label;
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'potree-button-icon';
+    iconSpan.innerHTML = config.icon;
+    button.appendChild(iconSpan);
+
+    // Create dropdown menu
+    const menu = document.createElement('div');
+    menu.className = 'potree-dropdown-menu';
+    menu.style.cssText = `
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: rgba(40, 44, 52, 0.95);
+      backdrop-filter: blur(8px);
+      border-radius: 6px;
+      padding: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      min-width: 140px;
+      z-index: 10000;
+    `;
+
+    // Add view options
+    this.viewOptions.forEach(view => {
+      const option = document.createElement('button');
+      option.className = 'potree-dropdown-option';
+      option.textContent = view.label;
+      option.dataset.view = view.id;
+      option.style.cssText = `
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.85);
+        text-align: left;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 13px;
+        transition: background 0.15s ease;
+      `;
+
+      option.onclick = (e) => {
+        e.stopPropagation();
+        this.viewer.setNamedView(view.id);
+        menu.style.display = 'none';
+      };
+
+      option.onmouseenter = () => {
+        option.style.background = 'rgba(255, 255, 255, 0.1)';
+      };
+
+      option.onmouseleave = () => {
+        option.style.background = 'transparent';
+      };
+
+      menu.appendChild(option);
+    });
+
+    // Toggle dropdown on button click
+    button.onclick = (e) => {
+      e.stopPropagation();
+      const isVisible = menu.style.display === 'block';
+      menu.style.display = isVisible ? 'none' : 'block';
+    };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+      menu.style.display = 'none';
+    });
+
+    container.appendChild(button);
+    container.appendChild(menu);
+
+    // Store reference
+    this.viewDropdown = { container, menu, button };
 
     return container;
   }
@@ -344,17 +539,22 @@ export class Toolbar {
       this._updateButtonStates(mode);
     });
 
-    // Update color mode dropdown when color type changes
+    // Update appearance dropdown when color type changes
     this.viewer.on('color-type-changed', (colorType) => {
-      this._updateColorModeDropdown(colorType);
+      this._updateAppearanceDropdown(colorType);
     });
 
-    // Initialize color mode dropdown with current color type
+    // Initialize appearance dropdown with current color type
     this.viewer.on('pointcloud-loaded', () => {
       const currentColorType = this.viewer.getPointColorType();
       if (currentColorType !== undefined) {
-        this._updateColorModeDropdown(currentColorType);
+        this._updateAppearanceDropdown(currentColorType);
       }
+    });
+
+    // Update appearance dropdown when background changes
+    this.viewer.on('background-changed', (background) => {
+      this._updateBackgroundSelection(background);
     });
   }
 
@@ -374,17 +574,36 @@ export class Toolbar {
   }
 
   /**
-   * Update color mode dropdown to highlight active color type
+   * Update appearance dropdown to highlight active color type
    * @private
    */
-  _updateColorModeDropdown(colorType) {
-    if (!this.colorModeDropdown || !this.colorModeDropdown.menu) {
+  _updateAppearanceDropdown(colorType) {
+    if (!this.appearanceDropdown || !this.appearanceDropdown.menu) {
       return;
     }
 
-    const options = this.colorModeDropdown.menu.querySelectorAll('.potree-dropdown-option');
+    const options = this.appearanceDropdown.menu.querySelectorAll('[data-color-mode]');
     options.forEach(option => {
       if (parseInt(option.dataset.colorMode) === colorType) {
+        option.style.background = 'rgba(52, 152, 219, 0.3)';
+      } else {
+        option.style.background = 'transparent';
+      }
+    });
+  }
+
+  /**
+   * Update appearance dropdown to highlight active background
+   * @private
+   */
+  _updateBackgroundSelection(background) {
+    if (!this.appearanceDropdown || !this.appearanceDropdown.menu) {
+      return;
+    }
+
+    const options = this.appearanceDropdown.menu.querySelectorAll('[data-background]');
+    options.forEach(option => {
+      if (option.dataset.background === background) {
         option.style.background = 'rgba(52, 152, 219, 0.3)';
       } else {
         option.style.background = 'transparent';

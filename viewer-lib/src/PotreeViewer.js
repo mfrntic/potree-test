@@ -497,6 +497,101 @@ export class PotreeViewer extends EventEmitter {
   }
 
   /**
+   * Calculate optimal camera distance to fit object in view
+   * @private
+   * @param {THREE.Vector3} direction - Normalized direction from target to camera
+   * @returns {number} Optimal distance
+   */
+  _calculateFitDistance(direction) {
+    const pco = this.pointClouds[0];
+    const { center: worldCenter } = this._getPointCloudWorldBounds(pco);
+
+    const fov = this.camera.fov * (Math.PI / 180);
+    const aspect = this.container.clientWidth / this.container.clientHeight;
+
+    // Create camera basis vectors (right, up, forward)
+    const cameraForward = direction.clone().negate();
+    const cameraRight = new THREE.Vector3();
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    cameraRight.crossVectors(worldUp, cameraForward).normalize();
+    const cameraUp = new THREE.Vector3();
+    cameraUp.crossVectors(cameraForward, cameraRight).normalize();
+
+    // Get all 8 corners of the bounding box in world space
+    const bbox = pco.boundingBox;
+    const corners = [
+      new THREE.Vector3(bbox.min.x, bbox.min.y, bbox.min.z),
+      new THREE.Vector3(bbox.max.x, bbox.min.y, bbox.min.z),
+      new THREE.Vector3(bbox.min.x, bbox.max.y, bbox.min.z),
+      new THREE.Vector3(bbox.max.x, bbox.max.y, bbox.min.z),
+      new THREE.Vector3(bbox.min.x, bbox.min.y, bbox.max.z),
+      new THREE.Vector3(bbox.max.x, bbox.min.y, bbox.max.z),
+      new THREE.Vector3(bbox.min.x, bbox.max.y, bbox.max.z),
+      new THREE.Vector3(bbox.max.x, bbox.max.y, bbox.max.z),
+    ];
+
+    // Transform corners to world space
+    corners.forEach(corner => corner.applyMatrix4(pco.matrixWorld));
+
+    // Project corners onto camera's up and right axes
+    let minHorizontal = Infinity, maxHorizontal = -Infinity;
+    let minVertical = Infinity, maxVertical = -Infinity;
+    let minDepth = Infinity, maxDepth = -Infinity;
+
+    corners.forEach(corner => {
+      const relative = corner.clone().sub(worldCenter);
+      const horizontal = relative.dot(cameraRight);
+      const vertical = relative.dot(cameraUp);
+      const depth = relative.dot(cameraForward);
+
+      minHorizontal = Math.min(minHorizontal, horizontal);
+      maxHorizontal = Math.max(maxHorizontal, horizontal);
+      minVertical = Math.min(minVertical, vertical);
+      maxVertical = Math.max(maxVertical, vertical);
+      minDepth = Math.min(minDepth, depth);
+      maxDepth = Math.max(maxDepth, depth);
+    });
+
+    // Calculate visible width and height from camera's perspective
+    const visibleWidth = maxHorizontal - minHorizontal;
+    const visibleHeight = maxVertical - minVertical;
+    const objectDepth = maxDepth - minDepth;
+
+    // Calculate required distance for vertical and horizontal FOV
+    const distanceV = (visibleHeight / 2) / Math.tan(fov / 2);
+    const distanceH = (visibleWidth / 2) / (Math.tan(fov / 2) * aspect);
+
+    // Base distance to fit object in view frustum
+    let baseDistance = Math.max(distanceV, distanceH);
+
+    // CRITICAL: Account for depth offset
+    // If minDepth is negative (point is behind center), we need more distance
+    // If minDepth is positive (point is in front of center), we can be closer
+    baseDistance = baseDistance - minDepth;
+
+    // Detect if this is a top/bottom view (camera looking straight up/down)
+    // Check if direction is mostly vertical (Y-axis in world space)
+    // Reuse worldUp defined earlier (line 515)
+    const verticalAlignment = Math.abs(direction.dot(worldUp));
+    const isTopBottomView = verticalAlignment > 0.95; // ~18 degrees tolerance
+
+    // Apply safety margins
+    let depthSafetyMargin, overallMargin;
+
+    if (isTopBottomView) {
+      // Extra safety for top/bottom views to prevent entering point cloud
+      depthSafetyMargin = objectDepth * 0.5; // 50% of depth
+      overallMargin = 1.2; // 20% margin
+    } else {
+      // Normal margins for horizontal views
+      depthSafetyMargin = objectDepth * 0.15; // 15% of depth
+      overallMargin = 1.1; // 10% margin
+    }
+
+    return baseDistance * overallMargin + depthSafetyMargin;
+  }
+
+  /**
    * Set named view (predefined camera positions)
    * NOTE: Y is UP in our coordinate system (point cloud is rotated -90° around X)
    * @param {string} viewName - 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right'
@@ -508,56 +603,57 @@ export class PotreeViewer extends EventEmitter {
     }
 
     const pco = this.pointClouds[0];
-    const { center, size } = this._getPointCloudWorldBounds(pco);
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const distance = maxDim * 1.5;
+    const { center } = this._getPointCloudWorldBounds(pco);
 
-    let position;
+    let direction; // Direction from target to camera
 
     switch (viewName.toLowerCase()) {
       case 'top':
         // Look from above (Y+ is up)
-        position = new THREE.Vector3(center.x, center.y + distance, center.z);
+        direction = new THREE.Vector3(0, 1, 0);
         break;
 
       case 'bottom':
         // Look from below
-        position = new THREE.Vector3(center.x, center.y - distance, center.z);
+        direction = new THREE.Vector3(0, -1, 0);
         break;
 
       case 'front':
-        // Look from front (negative Z)
-        position = new THREE.Vector3(center.x, center.y, center.z - distance);
+        // Look from front (positive Z) - camera looks toward negative Z
+        direction = new THREE.Vector3(0, 0, 1);
         break;
 
       case 'back':
-        // Look from back (positive Z)
-        position = new THREE.Vector3(center.x, center.y, center.z + distance);
+        // Look from back (negative Z) - camera looks toward positive Z
+        direction = new THREE.Vector3(0, 0, -1);
         break;
 
       case 'left':
         // Look from left (negative X)
-        position = new THREE.Vector3(center.x - distance, center.y, center.z);
+        direction = new THREE.Vector3(-1, 0, 0);
         break;
 
       case 'right':
         // Look from right (positive X)
-        position = new THREE.Vector3(center.x + distance, center.y, center.z);
+        direction = new THREE.Vector3(1, 0, 0);
         break;
 
       case 'isometric':
         // Isometric view from corner (for backward compatibility)
-        position = new THREE.Vector3(
-          center.x + distance * 0.7,
-          center.y + distance * 0.7,
-          center.z - distance * 0.7
-        );
+        direction = new THREE.Vector3(0.7, 0.7, -0.7).normalize();
         break;
 
       default:
         console.warn(`Unknown view name: ${viewName}`);
         return;
     }
+
+    // Calculate optimal distance for this view direction
+    const distance = this._calculateFitDistance(direction);
+
+    // Position camera at calculated distance
+    const position = new THREE.Vector3();
+    position.copy(center).add(direction.multiplyScalar(distance));
 
     this.setView(
       { x: position.x, y: position.y, z: position.z },
@@ -583,7 +679,7 @@ export class PotreeViewer extends EventEmitter {
 
   /**
    * Fit point cloud to screen
-   * Uses perspective-correct calculation to ensure entire object is visible
+   * Adjusts camera distance to fit entire object without changing view direction
    */
   fitToScreen() {
     if (this.pointClouds.length === 0) {
@@ -591,57 +687,28 @@ export class PotreeViewer extends EventEmitter {
       return;
     }
 
-    const pco = this.pointClouds[0];
-    const { center: worldCenter, size } = this._getPointCloudWorldBounds(pco);
+    const { center: worldCenter } = this._getPointCloudWorldBounds(this.pointClouds[0]);
 
-    // Debug: Check what we're getting
-    console.log('=== fitToScreen Debug ===');
-    console.log('World center:', worldCenter);
-    console.log('Size:', size);
-    console.log('BBox local center:', pco.boundingBox.getCenter(new THREE.Vector3()));
-    console.log('BBox min:', pco.boundingBox.min);
-    console.log('BBox max:', pco.boundingBox.max);
-    console.log('PCO position:', pco.position);
-    console.log('PCO rotation:', pco.rotation);
+    // Get current camera direction (from target to camera)
+    const currentDirection = new THREE.Vector3();
+    currentDirection.subVectors(this.camera.position, this.controls.target).normalize();
 
-    const fov = this.camera.fov * (Math.PI / 180);
-    const aspect = this.container.clientWidth / this.container.clientHeight;
+    // Calculate optimal distance (auto-detects top/bottom view for extra safety)
+    const distance = this._calculateFitDistance(currentDirection);
 
-    // Calculate distance to fit entire object in view
-    // Use the maximum dimension to ensure everything is visible
-    const maxDim = Math.max(size.x, size.y, size.z);
+    // Position camera at calculated distance along current direction
+    const newPosition = new THREE.Vector3();
+    newPosition.copy(worldCenter).add(currentDirection.multiplyScalar(distance));
 
-    // Calculate required distance for vertical and horizontal FOV
-    const distanceV = maxDim / (2 * Math.tan(fov / 2));
-    const distanceH = maxDim / (2 * Math.tan(fov / 2) * aspect);
-    const baseDistance = Math.max(distanceV, distanceH);
-
-    // Add 10% margin to ensure entire object is visible
-    const distance = baseDistance * 1.1;
-
-    // Position camera higher and looking straight at the crown
-    // Target is positioned at crown height (upper part of the tree)
-    const crownTarget = new THREE.Vector3(
-      worldCenter.x ,
-      worldCenter.y + size.y * 0.22,  // Target at crown height (30% above center)
-      worldCenter.z * 0.75
-    );
-
-    const newPosition = new THREE.Vector3(
-      worldCenter.x - distance  ,   // Slight shift left
-      crownTarget.y,                      // Camera at same height as crown
-      worldCenter.z + distance            // In front along Z axis
-    );
-
+    // Update camera position and target
     this.camera.position.copy(newPosition);
-    this.controls.target.copy(crownTarget);
-    this.camera.lookAt(crownTarget);
+    this.controls.target.copy(worldCenter);
     this.controls.update();
 
     this.emit('view-changed', {
       namedView: 'custom',
       position: { x: newPosition.x, y: newPosition.y, z: newPosition.z },
-      target: { x: crownTarget.x, y: crownTarget.y, z: crownTarget.z },
+      target: { x: worldCenter.x, y: worldCenter.y, z: worldCenter.z },
     });
   }
 
